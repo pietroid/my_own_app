@@ -1,0 +1,604 @@
+<!doctype html>
+<!--
+  The RFC (or any Markdown in a PR) as a page, with the PR's line comments
+  under the blocks they are about. Select text or tap + to draft a Q, Learn,
+  Decision or Note; Send posts every draft as one PR review, so the queue
+  reads them as line comments and answers under each.
+
+    https://pietroteruya.dev/my-own-app/review.html?pr=7&path=product/research/…/README.md
+
+  Static: GitHub Pages serves it (.github/workflows/review-page.yml), and it
+  talks to api.github.com straight from the browser. Sending needs a
+  fine-grained token for this repo (Pull requests: read and write), kept in
+  this browser's localStorage only. See .tool/README.md, "review".
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>
+// The token is typed here: never on a page served over plain http.
+if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) location.replace(location.href.replace(/^http:/, 'https:'));
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@300..700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<!--
+  The deck: how an RFC reads, shared with .tool/annotate.mjs, which copies
+  the style and the script marked id="deck" into its own page. A dark
+  page of its own, apart from the app's look: true black, Onest
+  only, borderless fills, 24/14/12 radii, lime only where it means something.
+  Each `##` is a slide, an Onest display headline over its one point.
+-->
+<style id="deck">
+  :root {
+    --bg: #000; --surface: #0d0d0d; --fill: #1c1c1c; --fill2: #2b2b2b; --line: #232323;
+    --ink: #f5f5f5; --prose: #d4d4d4; --ink2: #a1a1a1; --ink3: #6b6b6b;
+    --accent: #eeffbb; --on-accent: #000; --accent-soft: rgba(238, 255, 187, .14); --accent-faint: rgba(238, 255, 187, .07);
+    --info: #17204a; --on-info: #9aabef; --warm: #2a1d10; --on-warm: #e5b27f;
+    --calm: #101a16; --on-calm: #7fa496; --danger: #9e2b3d; --on-danger: #e8697c;
+    --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+    color-scheme: dark;
+  }
+  body { margin: 0; background: var(--bg); color: var(--prose); -webkit-text-size-adjust: 100%;
+         font: 400 17px/1.6 Onest, system-ui, sans-serif; font-feature-settings: 'ss01', 'tnum' 0; }
+  .deck { max-width: 760px; margin: 0 auto; padding: 12px 12px 140px; }
+  .slide { background: var(--surface); border-radius: 24px; padding: 28px 24px 22px; margin: 0 0 12px; scroll-margin-top: 64px; }
+  .slide.cover { background: none; padding: 40px 12px 24px; }
+  .slide::before { content: attr(data-n); display: block; margin-bottom: 10px;
+                   font: 500 13px/1 Onest, sans-serif; color: var(--ink3); letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+  .slide.cover::before { content: none; }
+  .deck h1 { margin: 0 0 14px; color: var(--ink); font-weight: 300; font-size: 40px; line-height: 1.1; letter-spacing: -.02em; }
+  .deck h2 { margin: 0 0 16px; color: var(--ink); font-weight: 400; font-size: 28px; line-height: 1.15; letter-spacing: -.02em; }
+  .deck h3 { margin: 22px 0 8px; color: var(--ink); font-weight: 500; font-size: 20px; line-height: 1.2; }
+  .cover p { color: var(--ink2); font-size: 15px; }
+  .deck p { margin: 0 0 12px; }
+  .deck strong { color: var(--ink); font-weight: 600; }
+  .deck em { color: var(--ink); }
+  .deck a { color: var(--ink); text-decoration-color: var(--ink3); text-underline-offset: 3px; }
+  .deck a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  .deck ul, .deck ol { margin: 0 0 12px; padding-left: 1.2em; }
+  .deck li { margin: 4px 0; padding-left: 2px; }
+  .deck li::marker { color: var(--ink3); }
+  .deck img { display: block; max-width: 100%; height: auto; border-radius: 14px; margin: 4px auto 12px; }
+  .deck code { font: .84em/1.4 var(--mono); background: var(--fill); color: var(--ink); border-radius: 6px; padding: 1px 5px; }
+  .deck pre { background: var(--fill); border-radius: 14px; padding: 14px 16px; margin: 0 0 12px; overflow-x: auto; }
+  .deck pre code { background: none; padding: 0; font-size: 13px; line-height: 1.55; color: var(--prose); }
+  .deck table { border-collapse: collapse; font-size: 14.5px; line-height: 1.45; display: block; overflow-x: auto; margin: 0 0 12px; }
+  .deck th { font-weight: 500; font-size: 13px; color: var(--ink2); text-align: left; padding: 6px 12px 8px 0; vertical-align: bottom; }
+  .deck td { padding: 9px 12px 9px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .deck td:first-child { color: var(--ink); font-weight: 500; }
+  .deck hr { border: 0; height: 12px; }
+  .deck blockquote { margin: 0 0 12px; padding: 12px 16px; border-radius: 14px; background: var(--fill); font-size: 15.5px; }
+  .deck blockquote p:last-child { margin: 0; }
+  .note-Q blockquote, blockquote.note-Q { background: var(--info); }
+  .note-Q strong:first-child, .note-A strong:first-child, .note-Learn strong:first-child,
+  .note-Decision strong:first-child, .note-Note strong:first-child { font-weight: 500; font-size: 13px; letter-spacing: .04em; }
+  .note-Q strong:first-child { color: var(--on-info); }
+  .note-A blockquote, blockquote.note-A { background: var(--fill); }
+  .note-A strong:first-child { color: var(--accent); }
+  .note-Learn blockquote, blockquote.note-Learn { background: var(--warm); }
+  .note-Learn strong:first-child { color: var(--on-warm); }
+  .note-Decision blockquote, blockquote.note-Decision { background: var(--calm); }
+  .note-Decision strong:first-child { color: var(--on-calm); }
+  /* GitHub alerts: [!IMPORTANT] is the slide's one point, [!TIP] an idea to keep. */
+  .deck blockquote.alert { padding: 16px 18px; }
+  .alert .label { display: block; margin-bottom: 4px; font: 500 13px/1.4 Onest, sans-serif; letter-spacing: .04em; color: var(--ink2); }
+  .alert-important { background: var(--accent-soft); }
+  .alert-important p { color: var(--ink); font-size: 19px; line-height: 1.4; font-weight: 450; }
+  .alert-important .label, .alert-tip .label { color: var(--accent); }
+  .alert-tip { background: var(--accent-faint); }
+  .alert-tip p { color: var(--ink); }
+  .alert-warning, .alert-caution { background: var(--warm); }
+  .alert-warning .label, .alert-caution .label { color: var(--on-warm); }
+  .diagram { background: var(--bg); border-radius: 14px; padding: 14px 8px; margin: 0 0 12px; overflow-x: auto; text-align: center; }
+  .diagram svg { max-width: 100%; height: auto; }
+  .diagram.failed { text-align: left; color: var(--on-danger); font: 13px/1.5 var(--mono); white-space: pre-wrap; }
+  @media (max-width: 520px) {
+    body { font-size: 16.5px; }
+    .deck { padding: 8px 8px 140px; }
+    .slide { padding: 22px 18px 16px; border-radius: 24px; }
+    .slide.cover { padding: 28px 10px 16px; }
+    .deck h1 { font-size: 34px; }
+    .deck h2 { font-size: 25px; }
+  }
+</style>
+<script id="deck">
+// Turns rendered Markdown into slides. No framework: called by the page
+// after each render, with `main` already holding a `.slide` per `##`.
+
+// A block starts a slide when it opens with `## `; what comes before the
+// first one is the cover (title and status line).
+const startsSlide = (text) => /^##\s/.test(text);
+
+function deckSlide(main, text) {
+  const last = main.lastElementChild;
+  if (last && !startsSlide(text)) return last;
+  const slide = document.createElement('article');
+  slide.className = 'slide' + (last ? '' : ' cover');
+  main.append(slide);
+  return slide;
+}
+
+// Numbers the slides ("03 / 12") and returns their headlines.
+function deckNumber(main) {
+  const slides = [...main.querySelectorAll('.slide:not(.cover)')];
+  const pad = (n) => String(n).padStart(2, '0');
+  slides.forEach((s, i) => (s.dataset.n = `${pad(i + 1)} / ${pad(slides.length)}`));
+  return slides.map((s) => s.querySelector('h2')?.textContent ?? '');
+}
+
+// GitHub's alerts (> [!TIP]) and the RFC's notes (> **Q:**) get their colours.
+const ALERTS = { IMPORTANT: 'The point', TIP: 'Keep', NOTE: 'Note', WARNING: 'Watch', CAUTION: 'Watch' };
+function deckQuotes(el) {
+  for (const q of el.querySelectorAll('blockquote')) {
+    const first = q.querySelector('p');
+    const alert = first?.innerHTML.match(/^\s*\[!(\w+)\]\s*(<br>)?/);
+    if (alert && ALERTS[alert[1].toUpperCase()]) {
+      const kind = alert[1].toLowerCase();
+      first.innerHTML = first.innerHTML.slice(alert[0].length);
+      if (!first.innerHTML.trim()) first.remove();
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = ALERTS[alert[1].toUpperCase()];
+      q.prepend(label);
+      q.classList.add('alert', `alert-${kind}`);
+      continue;
+    }
+    const note = first?.querySelector('strong:first-child')?.textContent.match(/^(Q|A|Learn|Decision|Note)\b/);
+    if (note && first.firstElementChild?.tagName === 'STRONG') q.classList.add(`note-${note[1]}`);
+  }
+}
+
+// ```mermaid blocks become diagrams in the page's colours. Each source is drawn
+// once and kept, since the pages redraw on every change.
+let mermaidLoaded = null;
+const drawn = new Map();
+async function deckDiagrams(el) {
+  const blocks = [...el.querySelectorAll('pre > code.language-mermaid')];
+  if (!blocks.length) return;
+  mermaidLoaded ??= import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs').then(async ({ default: m }) => {
+    await document.fonts.ready;
+    m.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'strict',
+      fontFamily: 'Onest, system-ui, sans-serif',
+      // Tight, so a diagram is scaled down less to fit a phone.
+      flowchart: { nodeSpacing: 22, rankSpacing: 30, padding: 10, wrappingWidth: 150, diagramPadding: 4 },
+      sequence: { actorMargin: 24, boxMargin: 6, noteMargin: 6, messageMargin: 28, diagramMarginX: 4, diagramMarginY: 4 },
+      themeVariables: {
+        darkMode: true, background: '#000', fontFamily: 'Onest, system-ui, sans-serif', fontSize: '16px',
+        primaryColor: '#1c1c1c', primaryTextColor: '#f5f5f5', primaryBorderColor: '#1c1c1c',
+        secondaryColor: '#2b2b2b', secondaryTextColor: '#f5f5f5', secondaryBorderColor: '#2b2b2b',
+        tertiaryColor: '#0d0d0d', tertiaryTextColor: '#d4d4d4', tertiaryBorderColor: '#232323',
+        lineColor: '#6b6b6b', textColor: '#d4d4d4', mainBkg: '#1c1c1c', nodeBorder: '#1c1c1c',
+        clusterBkg: '#0d0d0d', clusterBorder: '#232323', edgeLabelBackground: '#000', titleColor: '#a1a1a1',
+        actorBkg: '#1c1c1c', actorBorder: '#1c1c1c', actorTextColor: '#f5f5f5', actorLineColor: '#2b2b2b',
+        signalColor: '#a1a1a1', signalTextColor: '#d4d4d4', labelBoxBkgColor: '#1c1c1c', labelBoxBorderColor: '#1c1c1c',
+        labelTextColor: '#f5f5f5', loopTextColor: '#a1a1a1', noteBkgColor: '#2a1d10', noteTextColor: '#e5b27f', noteBorderColor: '#2a1d10',
+        activationBkgColor: '#2b2b2b', activationBorderColor: '#2b2b2b', sequenceNumberColor: '#000',
+        pie1: '#eeffbb', pie2: '#7c92e8', pie3: '#e5b27f', pie4: '#7fa496', pie5: '#e8697c', pieStrokeColor: '#000', pieTitleTextColor: '#f5f5f5', pieSectionTextColor: '#000', pieLegendTextColor: '#d4d4d4',
+        git0: '#eeffbb', gitBranchLabel0: '#000',
+        cScale0: '#1c1c1c', cScale1: '#2b2b2b', cScale2: '#17204a',
+      },
+      themeCSS: '.key > rect, .key > polygon, .key > circle, .key > path, rect.key { fill: #eeffbb !important; stroke: #eeffbb !important; } .key .nodeLabel, .key text, .key span { color: #000 !important; fill: #000 !important; }',
+    });
+    return m;
+  });
+  const mermaid = await mermaidLoaded;
+  for (const code of blocks) {
+    const src = code.textContent;
+    const box = document.createElement('div');
+    box.className = 'diagram';
+    code.parentElement.replaceWith(box);
+    if (!drawn.has(src)) {
+      drawn.set(src, mermaid.render(`d${drawn.size}`, src).then((r) => r.svg).catch((e) => {
+        console.error(`mermaid: ${e.message ?? e}`);
+        return null;
+      }));
+    }
+    const svg = await drawn.get(src);
+    if (svg) box.innerHTML = svg;
+    else {
+      box.classList.add('failed');
+      box.textContent = `This diagram did not draw:\n\n${src}`;
+    }
+  }
+}
+
+// Everything a block needs after marked: its quotes, then its diagrams.
+// The page sets body[data-ready] once diagrams are drawn (.tool/doc shot waits on it).
+async function deckFinish(main) {
+  deckQuotes(main);
+  await deckDiagrams(main);
+  document.body.dataset.ready = '1';
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  header { position: sticky; top: 0; z-index: 2; background: rgba(0, 0, 0, .82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+           padding: 12px 18px; display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--ink2); }
+  header b { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header #at { color: var(--ink3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  header a { color: var(--ink2); margin-left: auto; white-space: nowrap; }
+  .block { position: relative; border-radius: 14px; padding: 1px 36px 1px 10px; margin: 0 -10px; }
+  .block > :first-child { margin-top: 4px; }
+  .block > :last-child { margin-bottom: 4px; }
+  .block.picked { background: var(--fill); }
+  .add { position: absolute; right: 2px; top: 6px; width: 28px; height: 28px; border: 0;
+         border-radius: 50%; background: transparent; color: var(--ink3); font: 20px/28px Onest, sans-serif; cursor: pointer; }
+  .add:hover, .block.picked .add { background: var(--fill2); color: var(--ink); }
+  .thread, .draft, .composer { margin: 4px 0 12px; padding: 12px 14px; border-radius: 14px; font-size: 15px; }
+  .thread { background: var(--info); }
+  .thread .c + .c { border-top: 1px solid rgba(255, 255, 255, .08); margin-top: 8px; padding-top: 8px; }
+  .thread .who, .draft .who { font-size: 12px; color: var(--on-info); }
+  .thread p, .draft p { margin: 4px 0; }
+  .draft { background: var(--accent-faint); }
+  .draft .who { color: var(--accent); }
+  .draft button { float: right; border: 0; background: none; color: var(--ink2); font-size: 18px; cursor: pointer; }
+  .composer { background: var(--fill); }
+  .composer .quote { font-size: 14px; color: var(--ink2); font-style: italic; margin-bottom: 8px; }
+  .kinds { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  button.pill { border: 0; border-radius: 999px; padding: 7px 15px; cursor: pointer;
+                font: 500 14px Onest, sans-serif; background: var(--fill2); color: var(--ink2); }
+  button.pill.on, button.pill.go { background: var(--accent); color: var(--on-accent); }
+  textarea, input { width: 100%; border: 0; border-radius: 12px; padding: 10px 12px;
+                    background: var(--bg); color: var(--ink); font: 16px/1.5 Onest, sans-serif; }
+  textarea { min-height: 80px; resize: vertical; }
+  .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: rgba(0, 0, 0, .86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+           padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+           display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink2); }
+  footer span { margin-right: auto; }
+  footer button:disabled { opacity: .35; }
+  .msg { padding: 24px 12px; color: var(--ink2); }
+  .msg a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header><b id="name">Review</b><span id="at"></span><a id="pr" target="_blank"></a></header>
+<main id="doc" class="deck"><p class="msg">Loading…</p></main>
+<footer><span id="status"></span><button class="pill on" id="quote" hidden>Comment on selection</button><button class="pill go" id="send" disabled>Send</button></footer>
+
+<script id="core">
+// No DOM in this script, so a check can run it in Node.
+const KINDS = ['Q', 'Learn', 'Decision', 'Note'];
+
+// A block is a run of non-blank lines; a fenced code block stays one block
+// even with blank lines inside it. Lines counted from 1, as GitHub does.
+function blocksOf(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let start = -1;
+  let fence = null;
+  const close = (end) => blocks.push({ start: start + 1, end, text: lines.slice(start, end).join('\n') });
+  for (let i = 0; i < lines.length; i++) {
+    const marker = lines[i].match(/^\s*(```|~~~)/)?.[1];
+    if (fence) {
+      if (marker === fence) fence = null;
+      continue;
+    }
+    if (marker) {
+      if (start < 0) start = i;
+      fence = marker;
+    } else if (lines[i].trim() === '') {
+      if (start >= 0) close(i);
+      start = -1;
+    } else if (start < 0) {
+      start = i;
+    }
+  }
+  if (start >= 0) close(lines.length);
+  return blocks;
+}
+
+// What a line of Markdown reads as, near enough to find selected text in it.
+const plain = (s) => s
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/<[^>]+>/g, '')
+  .replace(/[*_`~|>#]/g, '')
+  .replace(/[“”"‘’']/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+
+// The lines a draft is about: the line the selected text starts on, or the
+// whole block when nothing was selected (or the text can't be found).
+function linesFor(block, quote) {
+  const q = plain(quote ?? '');
+  if (q) {
+    const lines = block.text.split('\n');
+    for (const len of [40, 20, 8]) {
+      const head = q.slice(0, len);
+      const i = lines.findIndex((l) => plain(l).includes(head));
+      if (i >= 0) return { start: block.start + i, end: block.start + i };
+    }
+  }
+  return { start: block.start, end: block.end };
+}
+
+const bodyOf = (d) => `${d.kind}: ${d.text.trim()}` + (d.quote ? `\n\n> ${d.quote.trim().replace(/\s+/g, ' ')}` : '');
+
+// One review: each draft a comment on its lines, sent together so the queue
+// takes them as one round.
+function reviewOf(drafts, path, sha) {
+  return {
+    commit_id: sha,
+    event: 'COMMENT',
+    body: '',
+    comments: drafts.map((d) => ({
+      path,
+      body: bodyOf(d),
+      line: d.end,
+      side: 'RIGHT',
+      ...(d.start < d.end ? { start_line: d.start, start_side: 'RIGHT' } : {}),
+    })),
+  };
+}
+
+// When GitHub refuses the review (a line outside the PR's diff), the drafts
+// go as one plain comment on the PR, each naming its file and line.
+const fallbackOf = (drafts, path) => drafts
+  .map((d) => `On \`${path}\` line ${d.start}${d.start < d.end ? `–${d.end}` : ''}:\n\n${bodyOf(d)}`)
+  .join('\n\n---\n\n');
+
+// The PR's line comments on this file, as threads, each under the block
+// holding its line (the line it was left on, when it has moved since).
+function threadsOf(comments, path, blocks) {
+  const roots = comments.filter((c) => c.path === path && !c.in_reply_to_id);
+  return roots.map((root) => {
+    const line = root.line ?? root.original_line ?? 1;
+    const at = blocks.findIndex((b) => line >= b.start && line <= b.end);
+    return {
+      block: at >= 0 ? at : blocks.length - 1,
+      outdated: root.line == null,
+      comments: [root, ...comments.filter((c) => c.in_reply_to_id === root.id)],
+    };
+  });
+}
+</script>
+
+<script>
+const params = new URLSearchParams(location.search);
+const [owner, name] = (params.get('repo') ??
+  (location.hostname.endsWith('.github.io') ? `${location.hostname.split('.')[0]}/${location.pathname.split('/')[1]}` : 'pietroid/my-own-app')).split('/');
+const repo = `${owner}/${name}`;
+const pr = params.get('pr');
+let path = params.get('path');
+const TOKEN = 'my-own-app-review-token';
+const draftKey = () => `my-own-app-review:${repo}#${pr}:${path}`;
+
+let head = null;      // the PR's head: { sha, ref }
+let blocks = [];
+let threads = [];
+let drafts = [];
+let composing = null; // { block, quote, kind, text }
+
+const $ = (id) => document.getElementById(id);
+const status = (s) => ($('status').textContent = s);
+
+async function api(url, opts = {}) {
+  const token = localStorage.getItem(TOKEN);
+  const res = await fetch(`https://api.github.com/${url}`, {
+    ...opts,
+    headers: { accept: 'application/vnd.github+json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...opts.headers },
+  });
+  if (!res.ok) throw Object.assign(new Error(`${res.status} ${(await res.json().catch(() => ({}))).message ?? res.statusText}`), { status: res.status });
+  return opts.raw ? res.text() : res.json();
+}
+
+async function load() {
+  // ?md=<path>: a file served next to this page, drawn alone (no PR, no
+  // comments). How .tool/doc shot sees an RFC before it is pushed.
+  if (params.get('md')) {
+    path = params.get('md').replace(/^\//, '');
+    const res = await fetch(`/${path}`);
+    if (!res.ok) return fail(`Could not read ${path} (${res.status}).`);
+    $('name').textContent = document.title = path.split('/').slice(-2).join('/');
+    $('send').hidden = true;
+    blocks = blocksOf(await res.text());
+    return render();
+  }
+  if (!pr) return fail('Open this page with ?pr=<number> (and &path=<file.md>), as the queue\'s comment links it.');
+  const p = await api(`repos/${repo}/pulls/${pr}`);
+  head = { sha: p.head.sha, ref: p.head.ref };
+  $('pr').textContent = `#${pr}`;
+  $('pr').href = p.html_url;
+  if (!path) {
+    const files = await api(`repos/${repo}/pulls/${pr}/files?per_page=100`);
+    path = files.map((f) => f.filename).find((f) => /^product\/.*README\.md$/.test(f)) ?? files.find((f) => f.filename.endsWith('.md'))?.filename;
+    if (!path) return fail('This PR changes no Markdown.');
+  }
+  const [text, comments] = await Promise.all([
+    api(`repos/${repo}/contents/${path}?ref=${head.sha}`, { raw: true, headers: { accept: 'application/vnd.github.raw' } }),
+    api(`repos/${repo}/pulls/${pr}/comments?per_page=100`),
+  ]);
+  $('name').textContent = path.split('/').slice(-2).join('/');
+  document.title = $('name').textContent;
+  blocks = blocksOf(text);
+  threads = threadsOf(comments, path, blocks);
+  drafts = JSON.parse(localStorage.getItem(draftKey()) ?? '[]');
+  render();
+}
+
+function fail(message) {
+  $('doc').innerHTML = `<p class="msg"></p>`;
+  $('doc').firstChild.textContent = message;
+}
+
+// Relative links in the Markdown point at the PR's files: pictures at its
+// head commit, the rest on its branch.
+function absolute(el) {
+  const dir = path.split('/').slice(0, -1);
+  const resolve = (rel) => {
+    const parts = [...dir];
+    for (const seg of rel.split('#')[0].split('/')) seg === '..' ? parts.pop() : seg !== '.' && parts.push(seg);
+    return parts.join('/');
+  };
+  const relative = (u) => u && !/^([a-z]+:|#|\/)/i.test(u);
+  el.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src');
+    if (relative(src)) img.src = head ? `https://raw.githubusercontent.com/${repo}/${head.sha}/${resolve(src)}` : `/${resolve(src)}`;
+  });
+  el.querySelectorAll('a').forEach((a) => {
+    const href = a.getAttribute('href');
+    if (relative(href)) a.href = head ? `https://github.com/${repo}/blob/${head.ref}/${resolve(href)}` : `/${resolve(href)}`;
+    a.target = '_blank';
+  });
+}
+
+const who = (c) => `${c.user?.login ?? '?'} · ${new Date(c.created_at).toLocaleString()}`;
+
+function render() {
+  const main = $('doc');
+  main.innerHTML = '';
+  blocks.forEach((b, i) => {
+    const el = document.createElement('section');
+    el.className = 'block' + (composing?.block === i ? ' picked' : '');
+    el.dataset.i = i;
+    el.innerHTML = marked.parse(b.text);
+    absolute(el);
+    const add = document.createElement('button');
+    add.className = 'add';
+    add.textContent = '+';
+    add.title = 'Comment on this block';
+    add.onclick = () => compose(i, '');
+    el.prepend(add);
+    const slide = deckSlide(main, b.text);
+    slide.append(el);
+    for (const t of threads.filter((t) => t.block === i)) {
+      const box = document.createElement('div');
+      box.className = 'thread';
+      for (const c of t.comments) {
+        const row = document.createElement('div');
+        row.className = 'c';
+        row.innerHTML = `<div class="who"></div>${marked.parse(c.body)}`;
+        row.firstChild.textContent = who(c) + (c === t.comments[0] && t.outdated ? ' · on an earlier version' : '');
+        box.append(row);
+      }
+      slide.append(box);
+    }
+    drafts.forEach((d, n) => {
+      if (d.block !== i) return;
+      const box = document.createElement('div');
+      box.className = 'draft';
+      box.innerHTML = `<button title="Delete">×</button><div class="who">draft · line ${d.start}${d.start < d.end ? '–' + d.end : ''}</div>${marked.parse(bodyOf(d))}`;
+      box.firstChild.onclick = () => { drafts.splice(n, 1); keep(); render(); };
+      slide.append(box);
+    });
+    if (composing?.block === i) slide.append(composer());
+  });
+  deckNumber(main);
+  deckFinish(main);
+  where();
+  $('send').disabled = !drafts.length;
+  $('send').textContent = drafts.length ? `Send ${drafts.length}` : 'Send';
+  status(threads.length ? `${threads.length} thread${threads.length > 1 ? 's' : ''}` : 'Select text or tap + to comment');
+}
+
+// The header names the slide in view.
+function where() {
+  const all = [...document.querySelectorAll('.slide:not(.cover)')];
+  const at = all.filter((s) => s.getBoundingClientRect().top < 120).length;
+  $('at').textContent = at ? `${at} / ${all.length}` : all.length ? `${all.length} slides` : '';
+}
+addEventListener('scroll', where, { passive: true });
+
+const keep = () => localStorage.setItem(draftKey(), JSON.stringify(drafts));
+
+function compose(block, quote) {
+  composing = { block, quote, kind: composing?.kind ?? 'Q', text: composing?.text ?? '' };
+  $('quote').hidden = true;
+  $('status').hidden = false;
+  render();
+  document.querySelector('.composer textarea')?.focus();
+}
+
+function composer() {
+  const box = document.createElement('div');
+  box.className = 'composer';
+  if (composing.quote) {
+    const q = document.createElement('div');
+    q.className = 'quote';
+    q.textContent = '“' + composing.quote + '”';
+    box.append(q);
+  }
+  const kinds = document.createElement('div');
+  kinds.className = 'kinds';
+  for (const k of KINDS) {
+    const b = document.createElement('button');
+    b.className = 'pill' + (k === composing.kind ? ' on' : '');
+    b.textContent = k;
+    b.onclick = () => { composing.kind = k; render(); };
+    kinds.append(b);
+  }
+  const area = document.createElement('textarea');
+  area.value = composing.text;
+  area.placeholder = 'A question, something to go deeper on, a decision…';
+  area.oninput = () => (composing.text = area.value);
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const cancel = document.createElement('button');
+  cancel.className = 'pill';
+  cancel.textContent = 'Cancel';
+  cancel.onclick = () => { composing = null; render(); };
+  const ok = document.createElement('button');
+  ok.className = 'pill go';
+  ok.textContent = 'Add';
+  ok.onclick = () => {
+    if (!composing.text.trim()) return;
+    drafts.push({ ...composing, ...linesFor(blocks[composing.block], composing.quote) });
+    composing = null;
+    keep();
+    render();
+  };
+  actions.append(cancel, ok);
+  box.append(kinds, area, actions);
+  return box;
+}
+
+// On a phone a selection has no mouseup, so a button offers it.
+let picked = null;
+document.addEventListener('selectionchange', () => {
+  const sel = getSelection();
+  const quote = sel.toString().trim();
+  const block = sel.anchorNode?.parentElement?.closest?.('.block');
+  picked = quote && block ? { block: Number(block.dataset.i), quote } : null;
+  $('quote').hidden = !picked;
+  $('status').hidden = !!picked;
+});
+$('quote').onclick = () => picked && compose(picked.block, picked.quote);
+
+$('send').onclick = async () => {
+  let token = localStorage.getItem(TOKEN);
+  if (!token) {
+    token = prompt('A GitHub fine-grained token for ' + repo + ' with "Pull requests: read and write" (github.com → Settings → Developer settings → Fine-grained tokens). It stays in this browser.');
+    if (!token?.trim()) return;
+    localStorage.setItem(TOKEN, token.trim());
+  }
+  $('send').disabled = true;
+  status('Sending…');
+  try {
+    try {
+      await api(`repos/${repo}/pulls/${pr}/reviews`, { method: 'POST', body: JSON.stringify(reviewOf(drafts, path, head.sha)) });
+    } catch (e) {
+      if (e.status !== 422) throw e;
+      await api(`repos/${repo}/issues/${pr}/comments`, { method: 'POST', body: JSON.stringify({ body: fallbackOf(drafts, path) }) });
+    }
+    drafts = [];
+    keep();
+    await load();
+    status('Sent. The queue answers under each comment in a few minutes.');
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) localStorage.removeItem(TOKEN);
+    status(`Not sent (${e.message}). Your drafts are kept.`);
+    $('send').disabled = false;
+  }
+};
+
+load().catch((e) => fail(`Could not load the PR: ${e.message}`));
+</script>
+</body>
+</html>

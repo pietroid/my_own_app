@@ -1,0 +1,35 @@
+# The app on the Raspberry Pi: the backend, and nginx serving the web build
+# and proxying /api to it.
+#
+# This file and an .env next to it are all that live on the Pi, in
+# /opt/my-own-app. The images come from GHCR; a deploy copies this file
+# over, pulls, and restarts. See SETUP.md.
+#
+# The .env holds the server's settings and the two ports below, which the
+# setup CLI picks so they meet no other app on the Pi.
+services:
+  my-own-app-backend:
+    image: ghcr.io/${APP_OWNER:-pietroid}/my-own-app-backend:${APP_TAG:-latest}
+    container_name: my-own-app-backend
+    restart: unless-stopped
+    # Published on loopback only, for checking it from the Pi itself
+    # (`curl localhost:$BACKEND_PORT/api/health`); everything else reaches it
+    # through the web container.
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:?set BACKEND_PORT in .env}:3000"
+    environment:
+      PORT: "3000"
+      TZ: ${APP_TIMEZONE:-America/Sao_Paulo}
+    env_file:
+      - .env
+
+  my-own-app-web:
+    image: ghcr.io/${APP_OWNER:-pietroid}/my-own-app-web:${APP_TAG:-latest}
+    container_name: my-own-app-web
+    restart: unless-stopped
+    # The Cloudflare tunnel points <your-domain> at this port.
+    # On every interface, as Lunna's is, whichever way cloudflared reaches it.
+    ports:
+      - "${WEB_PORT:?set WEB_PORT in .env}:80"
+    depends_on:
+      - my-own-app-backend

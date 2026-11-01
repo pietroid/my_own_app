@@ -1,0 +1,16 @@
+# Launcher icons, every platform: `dart run flutter_launcher_icons`.
+# Drawn from brand/*.svg (see brand/README.md).
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "brand/icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  background_color_ios: "#4F46E5"
+  adaptive_icon_background: "#4F46E5"
+  adaptive_icon_foreground: "brand/foreground.png"
+  web:
+    generate: true
+    image_path: "brand/icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#4F46E5"

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Runs what CI runs (.github/workflows/deploy.yml), on what changed, and
+# prints one line per step. A failing step also prints the lines that say
+# why; every full log stays in the log dir.
+#
+# Usage: .tool/check [--all] [--logs <dir>]
+#   Changed means against HEAD, untracked files included: the server if
+#   anything under server/ changed, the app's own tests if app/lib or
+#   app/test changed, and each app package with tests that changed (a change
+#   to app_ui or l10n tests everything). --all checks everything, as CI does.
+set -uo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+all=0; logs="${TMPDIR:-/tmp}/my-own-app-check"
+while [ $# -gt 0 ]; do
+  case $1 in
+    --all) all=1 ;;
+    --logs) logs=$2; shift ;;
+    *) echo "usage: .tool/check [--all] [--logs <dir>]"; exit 2 ;;
+  esac
+  shift
+done
+mkdir -p "$logs"; rm -f "$logs"/*.log
+
+changed=$(cd "$root" && { git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+server=0; packages=""
+if [ $all = 1 ] || grep -q '^server/' <<<"$changed"; then server=1; fi
+for dir in "$root"/app/packages/*/; do
+  name=$(basename "$dir")
+  [ -d "$dir/test" ] || continue
+  if [ $all = 1 ] || grep -qE "^app/packages/($name|app_ui|l10n)/" <<<"$changed"; then packages="$packages $name"; fi
+done
+app_changed=0; app_tests=0
+if [ $all = 1 ] || grep -q '^app/' <<<"$changed"; then app_changed=1; fi
+if [ $all = 1 ] || grep -qE '^app/(lib|test|packages/(app_ui|l10n))/' <<<"$changed"; then app_tests=1; fi
+
+failed=0
+# step <name> <dir> <command...>: runs it, logs it, prints ✓/✗ and the time.
+step() {
+  local name=$1 dir=$2; shift 2
+  local log="$logs/$name.log" start=$SECONDS
+  if (cd "$dir" && "$@") >"$log" 2>&1; then
+    echo "✓ $name ($((SECONDS - start))s)"
+  else
+    echo "✗ $name ($((SECONDS - start))s), log: $log"
+    # The lines that explain a failure, not the whole log.
+    grep -nE 'error|Error|FAIL|Expected|Actual|✕|●|warning •|info •|Some tests failed' "$log" | head -40 || tail -15 "$log"
+    failed=1
+  fi
+}
+
+# The server runs beside the app: different toolchains, no shared lock.
+if [ $server = 1 ]; then
+  (
+    step server-eslint "$root/server" npx eslint "src/**/*.ts"
+    step server-tsc "$root/server" npx tsc --noEmit -p tsconfig.json
+    step server-test "$root/server" env TZ=UTC npm test
+    exit $failed
+  ) >"$logs/server.out" 2>&1 &
+  server_pid=$!
+fi
+
+# Flutter takes a startup lock, so the app's steps run one after another.
+if [ $app_changed = 1 ]; then
+  # The glob is expanded inside app/, as CI does.
+  step app-analyze "$root/app" sh -c 'flutter analyze lib test packages/*/lib'
+  [ $app_tests = 1 ] && step test-app "$root/app" flutter test -r failures-only
+  for package in $packages; do
+    step "test-$package" "$root/app/packages/$package" flutter test -r failures-only
+  done
+fi
+
+if [ $server = 1 ]; then
+  wait $server_pid || failed=1
+  cat "$logs/server.out"
+fi
+[ $server = 0 ] && [ $app_changed = 0 ] && echo "nothing changed (pass --all to check everything)"
+exit $failed

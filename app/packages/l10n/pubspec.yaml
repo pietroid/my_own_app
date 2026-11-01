@@ -1,0 +1,21 @@
+name: l10n
+description: The app's strings, in Brazilian Portuguese, for every package.
+version: 0.1.0+1
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: ^3.44.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+
+dev_dependencies:
+  very_good_analysis: ^10.3.0
+
+flutter:
+  generate: true

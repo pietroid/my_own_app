@@ -1,0 +1,8 @@
+{
+  "API_BASE_URL": "http://localhost:3000/api",
+  "GOOGLE_WEB_CLIENT_ID": "YOUR_DEV_WEB_CLIENT_ID.apps.googleusercontent.com",
+  "GOOGLE_IOS_CLIENT_ID": "YOUR_DEV_IOS_CLIENT_ID.apps.googleusercontent.com",
+  "POSTHOG_KEY": "",
+  "POSTHOG_HOST": "https://us.i.posthog.com",
+  "FLAVOR": "dev"
+}

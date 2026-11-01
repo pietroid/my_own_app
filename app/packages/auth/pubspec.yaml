@@ -1,0 +1,30 @@
+name: auth
+description: Google sign-in through the server's Better Auth.
+version: 0.1.0+1
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: ^3.44.0
+
+dependencies:
+  app_ui:
+    path: ../app_ui
+  bloc: ^9.2.1
+  dio: ^5.8.0
+  equatable: ^2.0.7
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  flutter_secure_storage: ^9.2.4
+  google_sign_in: ^6.2.0
+  l10n:
+    path: ../l10n
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  bloc_test: ^10.0.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.5
+  very_good_analysis: ^10.3.0

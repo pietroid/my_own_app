@@ -1,0 +1,25 @@
+name: app_ui
+description: The app's design system.
+version: 0.1.0+1
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: ^3.44.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.3.0
+  google_fonts: ^8.2.0
+  phosphor_icons: ^3.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0
+
+flutter:
+  assets:
+    - assets/brand/
+    - assets/icons/

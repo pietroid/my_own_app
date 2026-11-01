@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Builds a preview entry point (app/lib/<slug>_preview.dart), screenshots
+# its scenes as a phone, and lays out the board, in one call. Prints the
+# paths of what it made; a failed build prints its errors.
+#
+# Usage: .tool/preview <slug> <scene>... [--out <dir>] [--board <board.json>] [--no-build]
+#   <out>/shots/<n>.png and strip.png; with --board, the board (board.png,
+#   screen1..n.png) in <out>/board/. --no-build reshoots the last build, for
+#   when only the board or a wait changed.
+set -uo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+slug=${1:?usage: .tool/preview <slug> <scene>... [--out dir] [--board board.json] [--no-build]}
+shift
+scenes=""; out="${TMPDIR:-/tmp}/my-own-app-preview/$slug"; board=""; build=1
+while [ $# -gt 0 ]; do
+  case $1 in
+    --out) out=$2; shift ;;
+    --board) board=$2; shift ;;
+    --no-build) build=0 ;;
+    *) scenes="$scenes $1" ;;
+  esac
+  shift
+done
+[ -n "$scenes" ] || { echo "name at least one scene"; exit 2; }
+mkdir -p "$out"; out=$(cd "$out" && pwd)
+entry="lib/${slug}_preview.dart"
+[ -f "$root/app/$entry" ] || entry="lib/$slug.dart"
+[ -f "$root/app/$entry" ] || { echo "no app/lib/${slug}_preview.dart"; exit 2; }
+
+if [ $build = 1 ]; then
+  start=$SECONDS; log="$out/build.log"
+  if ! (cd "$root/app" && flutter build web -t "$entry" \
+    --no-tree-shake-icons --no-wasm-dry-run -o "$out/web") >"$log" 2>&1; then
+    grep -nE 'Error|error:|Exception|Unable' "$log" | head -30 || tail -15 "$log"
+    echo "✗ build failed; log: $log"
+    exit 1
+  fi
+  echo "✓ built ($((SECONDS - start))s)"
+fi
+
+"$root/.tool/mockup/shoot-flutter.sh" "$out/web" "$out/shots" $scenes >/dev/null 2>"$out/shoot.log" \
+  || { echo "✗ screenshots failed; see $out/shoot.log"; exit 1; }
+echo "shots: $out/shots/strip.png ($(for s in $scenes; do printf '%s.png ' "$s"; done))"
+
+if [ -n "$board" ]; then
+  node "$root/.tool/mockup/board.mjs" "$board" "$out/board" >/dev/null || exit 1
+  echo "board: $out/board/board.png"
+fi

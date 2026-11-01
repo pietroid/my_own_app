@@ -1,0 +1,29 @@
+{
+  "@@locale": "pt",
+  "appName": "My Own App",
+  "@appName": {
+    "description": "The app's name, as it is written everywhere."
+  },
+  "authSignIn": "Entrar",
+  "authSignInWithGoogle": "Entrar com Google",
+  "authSignInFailed": "Não foi possível entrar",
+  "homeGreeting": "Olá, {name}",
+  "@homeGreeting": {
+    "description": "The greeting at the top of the home screen.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeGreetingAnonymous": "Olá",
+  "homeEmptyTitle": "Tudo pronto",
+  "homeEmptyBody": "Esta tela está em branco. É aqui que o app começa.",
+  "homeSignOut": "Sair",
+  "assistantOpen": "Falar com o assistente",
+  "assistantTitle": "Assistente",
+  "assistantHint": "Pergunte qualquer coisa",
+  "assistantSend": "Enviar",
+  "assistantEmpty": "Como posso ajudar?",
+  "assistantFailed": "O assistente não respondeu. Tente de novo."
+}

@@ -1,0 +1,46 @@
+name: my_own_app
+description: My Own App.
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: ^3.44.0
+
+dependencies:
+  analytics:
+    path: packages/analytics
+  api_client:
+    path: packages/api_client
+  app_ui:
+    path: packages/app_ui
+  auth:
+    path: packages/auth
+  bloc: ^9.2.1
+  equatable: ^2.0.7
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  flutter_localizations:
+    sdk: flutter
+  go_router: ^15.1.2
+  intl: ^0.20.2
+  l10n:
+    path: packages/l10n
+
+dev_dependencies:
+  bloc_lint: ^0.4.1
+  bloc_test: ^10.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
+  flutter_test:
+    sdk: flutter
+  google_fonts: ^8.2.0
+  mocktail: ^1.0.5
+  very_good_analysis: ^10.3.0
+
+flutter:
+  uses-material-design: true
+
+# The launcher icons and the splash come from brand/: see
+# flutter_launcher_icons.yaml, flutter_native_splash.yaml and brand/README.md.

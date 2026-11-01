@@ -1,0 +1,238 @@
+name: Deploy
+
+# Every push to main: test, build the backend and the web images, push them
+# to GHCR, and have the Pi pull them. Nothing is built on the Pi and nothing
+# is cloned there; it holds a compose file, an .env, and the images.
+#
+# Only the tests run until the repository variable DEPLOY is `true`, which
+# the setup CLI sets once the Pi has its .env and the tunnel its hostname.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  APP: my-own-app
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: server/.nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Server tests
+        working-directory: server
+        run: |
+          npm ci
+          npx eslint "src/**/*.ts"
+          npx tsc --noEmit -p tsconfig.json
+          npm test
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Pinned to the version used locally, so the analyzer CI runs is
+          # the one the code was written against. Bump both together.
+          flutter-version: 3.44.1
+          cache: true
+
+      - name: App analysis and tests
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze lib test packages/*/lib
+          flutter test
+          for package in packages/*; do
+            if [ -d "$package/test" ]; then
+              (cd "$package" && flutter test)
+            fi
+          done
+
+  backend:
+    name: Backend image
+    if: vars.DEPLOY == 'true'
+    # A standard x64 runner. The Pi is ARM64, so the image is cross-built
+    # under QEMU: slower (npm ci and tsc run emulated) but the layer cache
+    # keeps most deploys short.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: image
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${APP}-backend" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          platforms: linux/arm64
+          push: true
+          # No provenance manifests: they show up as extra untagged versions
+          # in the registry and count against package storage.
+          provenance: false
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+  web:
+    name: Web image
+    if: vars.DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: image
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${APP}-web" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.1
+          cache: true
+
+      - name: Build Flutter web
+        working-directory: app
+        env:
+          # PostHog's project key, public by design, so a variable and not a
+          # secret. Unset, the build sends nothing.
+          POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+        run: |
+          set -euo pipefail
+          # The web app shares an origin with the API, so it calls /api, and
+          # signs in through the redirect, so it needs no Google client id.
+          cat > env/web.json <<EOF
+          {
+            "API_BASE_URL": "/api",
+            "POSTHOG_KEY": "${POSTHOG_KEY}",
+            "FLAVOR": "production"
+          }
+          EOF
+          flutter pub get
+          flutter build web --release --pwa-strategy=none --dart-define-from-file env/web.json
+          tool/stamp_web.sh
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Only COPY steps over nginx:alpine, so an ARM64 image needs no QEMU.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./deploy/web.Dockerfile
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+
+  deploy:
+    name: Pull on the Pi
+    needs: [test, backend, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PI_SSH_PRIVATE_KEY }}
+
+      - name: Open the Cloudflare SSH tunnel
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
+          SSH_HOSTNAME: ${{ vars.CLOUDFLARE_SSH_HOSTNAME }}
+        run: |
+          set -euo pipefail
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          cloudflared access tcp --hostname "$SSH_HOSTNAME" --url localhost:2222 > /tmp/cloudflared.log 2>&1 &
+          sleep 5
+          cat /tmp/cloudflared.log
+
+      - name: Pull and restart
+        env:
+          PI_USER: ${{ vars.PI_USER }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          remote="${PI_USER}@localhost"
+          ssh_opts=(-p 2222 -o StrictHostKeyChecking=accept-new)
+
+          scp -P 2222 -o StrictHostKeyChecking=accept-new \
+            deploy/docker-compose.yml "${remote}:/opt/${APP}/docker-compose.yml"
+
+          # The job's own token is enough to pull, and lives only as long as
+          # the job: nothing long-lived is left on the Pi.
+          echo "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "$remote" \
+            "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+
+          ssh "${ssh_opts[@]}" "$remote" "
+            set -e
+            cd /opt/${APP}
+            export APP_OWNER='$owner' APP_TAG='$GITHUB_SHA'
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
+            docker logout ghcr.io
+          "
+
+  cleanup:
+    name: Prune old images
+    # Only once the Pi runs the new images, so what it runs is never pruned.
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        package: [my-own-app-backend, my-own-app-web]
+    steps:
+      # Every deploy pushes a version tagged with its commit. Keep the last
+      # few for rolling back (APP_TAG=<sha> on the Pi) and drop the rest.
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          min-versions-to-keep: 5
