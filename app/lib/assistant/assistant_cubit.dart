@@ -37,8 +37,7 @@ class AssistantState extends Equatable {
 /// {@endtemplate}
 class AssistantCubit extends Cubit<AssistantState> {
   /// {@macro assistant_cubit}
-  AssistantCubit({required this._repository})
-    : super(const AssistantState());
+  AssistantCubit({required this._repository}) : super(const AssistantState());
 
   final AssistantRepository _repository;
 

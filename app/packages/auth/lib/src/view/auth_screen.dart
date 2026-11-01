@@ -9,8 +9,8 @@ import 'package:l10n/l10n.dart';
 ///
 /// It owns the sign-in and reports how it went. What it draws around the
 /// sign-in is up to [child], which places an [AuthSignInButton] wherever it
-/// wants one. Without a [child] it is the logo, the name and a full-width
-/// button.
+/// wants one. Without a [child] it is the mark and the name on the build
+/// grid, over a full-width button.
 /// {@endtemplate}
 class AuthScreen extends StatelessWidget {
   /// {@macro auth_screen}
@@ -82,26 +82,36 @@ class _DefaultAuthBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s6,
-          vertical: AppSpacing.s8,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Image.asset(AppBrand.markAsset, package: 'app_ui', height: 120),
-            const SizedBox(height: AppSpacing.s6),
-            Text(
-              context.l10n.appName,
-              textAlign: TextAlign.center,
-              style: AppTypography.headline,
+    // The mark and the name on the build grid, the button at the bottom.
+    return AppBuildGrid(
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.maxContentWidth,
             ),
-            const SizedBox(height: AppSpacing.s12),
-            const AuthSignInButton(expand: true),
-          ],
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.s6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Image.asset(
+                      AppBrand.markAsset,
+                      package: 'app_ui',
+                      height: AppSpacing.s16,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                  Text(context.l10n.appName, style: AppTypography.display),
+                  const Spacer(flex: 2),
+                  const AuthSignInButton(expand: true),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

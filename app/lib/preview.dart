@@ -14,7 +14,8 @@ import 'package:my_own_app/home/home_page.dart';
 /// `?s=<n>` picks the scene, as `.tool/preview` shoots them:
 ///
 /// 1. the home, signed in;
-/// 2. the assistant, mid-conversation.
+/// 2. the assistant, mid-conversation;
+/// 3. the sign-in.
 ///
 /// A feature's mockup (`/create`) copies this shape into
 /// `lib/<slug>_preview.dart`: each scene seeds its state directly rather
@@ -65,6 +66,7 @@ class _PreviewApp extends StatelessWidget {
               },
               child: const AssistantView(),
             ),
+            3 => AuthScreen(authRepository: auth),
             _ => const HomePage(),
           },
         ),

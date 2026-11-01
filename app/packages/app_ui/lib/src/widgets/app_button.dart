@@ -125,6 +125,9 @@ class AppButton extends StatelessWidget {
       backgroundColor: background,
       disabledBackgroundColor: background,
       minimumSize: Size(expand ? double.infinity : 0, AppSpacing.tapTarget),
+      // The same height on web and desktop, which would otherwise draw it
+      // compact.
+      visualDensity: VisualDensity.standard,
       padding: EdgeInsets.symmetric(
         horizontal: variant == AppButtonVariant.tertiary
             ? AppSpacing.s4

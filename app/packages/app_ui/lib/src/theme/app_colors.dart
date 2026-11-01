@@ -2,47 +2,50 @@ import 'package:flutter/material.dart';
 
 /// The color tokens.
 ///
-/// A neutral ramp and one accent: the template's placeholder look, meant to
-/// be replaced by the app's own (`/design-system`). Screens only ever read
-/// these names, so changing a value restyles every screen at once; a value a
-/// screen needs that is not here becomes a new token, never a literal.
+/// A dark graphite workbench and one signal orange. The neutrals carry
+/// almost no hue, so the apps built inside My Own App can bring their own
+/// colour; orange only ever means "this can be acted on" or a state. Screens
+/// only ever read these names, so changing a value restyles every screen at
+/// once; a value a screen needs that is not here becomes a new token, never a
+/// literal.
 abstract final class AppColors {
   /// The page background behind every screen.
-  static const bg = Color(0xFFFFFFFF);
+  static const bg = Color(0xFF121214);
 
-  /// The surface a sheet, a menu, or a dialog sits on.
-  static const surface = Color(0xFFFFFFFF);
+  /// The surface a sheet, a menu, a dialog or a panel sits on: one step up
+  /// from [bg], usually edged with a [line].
+  static const surface = Color(0xFF19191C);
 
-  /// The borderless fill that gives a field or a card its shape.
-  static const fill = Color(0xFFF4F4F5);
+  /// The fill that gives a field or a card its shape.
+  static const fill = Color(0xFF202024);
 
   /// A heavier [fill], for pressed states, tracks, and inactive bars.
-  static const fillStrong = Color(0xFFE4E4E7);
+  static const fillStrong = Color(0xFF2B2B30);
 
-  /// Hairline separators.
-  static const line = Color(0xFFE4E4E7);
+  /// Hairline separators and the edges of panels and fields.
+  static const line = Color(0xFF2A2A2F);
 
-  /// Text primary.
-  static const ink = Color(0xFF18181B);
+  /// Text primary. 16:1 on [bg].
+  static const ink = Color(0xFFEDEDF0);
 
-  /// Text secondary: labels, captions, and subtitles.
-  static const ink2 = Color(0xFF71717A);
+  /// Text secondary: labels, captions, and subtitles. 7.3:1 on [bg].
+  static const ink2 = Color(0xFFA1A1AA);
 
-  /// Text tertiary: placeholders and disabled labels.
-  static const ink3 = Color(0xFFA1A1AA);
+  /// Text tertiary: placeholders and disabled labels only (3.6:1 on [bg]).
+  static const ink3 = Color(0xFF6B6B74);
 
-  /// The one colour for what can be acted on.
-  static const accent = Color(0xFF4F46E5);
+  /// The one colour for what can be acted on: signal orange.
+  static const accent = Color(0xFFFF7438);
 
-  /// What is drawn on [accent].
-  static const onAccent = Color(0xFFFFFFFF);
+  /// What is drawn on [accent]: near-black, 7.3:1 (white would be 2.7:1).
+  static const onAccent = Color(0xFF140A05);
 
-  /// A pale [accent], behind something selected or the person's own words.
-  static const accentSoft = Color(0xFFEEF2FF);
+  /// A dark [accent], behind something selected or the person's own words.
+  static const accentSoft = Color(0xFF3A2219);
 
   /// Something went well.
-  static const positive = Color(0xFF16A34A);
+  static const positive = Color(0xFF4ADE80);
 
   /// Something went wrong.
-  static const negative = Color(0xFFDC2626);
+  static const negative = Color(0xFFF87171);
 }

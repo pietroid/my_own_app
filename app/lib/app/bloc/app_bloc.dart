@@ -42,8 +42,7 @@ class AppBloc extends Bloc<AppEvent, AppState> {
   final Analytics _analytics;
   StreamSubscription<AppUser?>? _userSubscription;
 
-  Future<void> _identify(AppUser user) =>
-      _analytics.identify(user.id);
+  Future<void> _identify(AppUser user) => _analytics.identify(user.id);
 
   void _onUserChanged(AppUserChanged event, Emitter<AppState> emit) {
     final user = event.user;

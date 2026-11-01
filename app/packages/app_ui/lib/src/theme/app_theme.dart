@@ -15,8 +15,6 @@ abstract final class AppTheme {
     final colorScheme =
         ColorScheme.fromSeed(
           seedColor: AppColors.accent,
-          // Light today, which is the default; the brand decides.
-          // ignore: avoid_redundant_argument_values
           brightness: AppBrand.brightness,
         ).copyWith(
           primary: AppColors.accent,
@@ -38,6 +36,11 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.bg,
       canvasColor: AppColors.bg,
       textTheme: AppTypography.textTheme,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: AppColors.accent,
+        selectionColor: AppColors.accent.withValues(alpha: 0.35),
+        selectionHandleColor: AppColors.accent,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.bg,
         foregroundColor: AppColors.ink,
@@ -47,6 +50,15 @@ abstract final class AppTheme {
         centerTitle: false,
         titleTextStyle: AppTypography.title,
         systemOverlayStyle: overlayStyle,
+        // A hairline under the bar instead of a shadow.
+        shape: const Border(
+          bottom: BorderSide(color: AppColors.line),
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.accent,
+        linearTrackColor: AppColors.fillStrong,
+        circularTrackColor: Colors.transparent,
       ),
       iconTheme: const IconThemeData(
         color: AppColors.ink2,
@@ -58,9 +70,15 @@ abstract final class AppTheme {
         space: 1,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.ink,
-        contentTextStyle: AppTypography.label.copyWith(color: AppColors.bg),
+        backgroundColor: AppColors.fillStrong,
+        contentTextStyle: AppTypography.label.copyWith(color: AppColors.ink),
         behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(AppSpacing.chipRadius),
+          ),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -70,15 +88,24 @@ abstract final class AppTheme {
           horizontal: AppSpacing.s4,
           vertical: AppSpacing.s3,
         ),
-        border: const OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.all(
-            Radius.circular(AppSpacing.chipRadius),
-          ),
-        ),
+        // A hairline edge, which turns accent while the field is being
+        // written in.
+        border: _fieldBorder(AppColors.line),
+        enabledBorder: _fieldBorder(AppColors.line),
+        disabledBorder: _fieldBorder(AppColors.line),
+        focusedBorder: _fieldBorder(AppColors.accent),
+        errorBorder: _fieldBorder(AppColors.negative),
+        focusedErrorBorder: _fieldBorder(AppColors.negative),
       ),
     );
   }
+
+  static OutlineInputBorder _fieldBorder(Color color) => OutlineInputBorder(
+    borderSide: BorderSide(color: color),
+    borderRadius: const BorderRadius.all(
+      Radius.circular(AppSpacing.chipRadius),
+    ),
+  );
 
   /// The status and navigation bars over [AppColors.bg].
   static SystemUiOverlayStyle get overlayStyle =>

@@ -37,8 +37,7 @@ class AssistantMessage extends Equatable {
 /// {@endtemplate}
 class AssistantRepository {
   /// {@macro assistant_repository}
-  const AssistantRepository({required ApiClient apiClient})
-    : _api = apiClient;
+  const AssistantRepository({required ApiClient apiClient}) : _api = apiClient;
 
   final ApiClient _api;
 
@@ -49,7 +48,9 @@ class AssistantRepository {
   Future<String> reply(List<AssistantMessage> messages) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/assistant/chat',
-      data: {'messages': [for (final message in messages) message.toJson()]},
+      data: {
+        'messages': [for (final message in messages) message.toJson()],
+      },
     );
 
     return response.data?['reply'] as String? ?? '';

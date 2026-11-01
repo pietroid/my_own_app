@@ -142,8 +142,10 @@ class _Bubble extends StatelessWidget {
           vertical: AppSpacing.s3,
         ),
         constraints: const BoxConstraints(maxWidth: 420),
+        // The person's words on the accent; the assistant's on a panel.
         decoration: BoxDecoration(
-          color: mine ? AppColors.accentSoft : AppColors.fill,
+          color: mine ? AppColors.accentSoft : AppColors.surface,
+          border: mine ? null : Border.all(color: AppColors.line),
           borderRadius: const BorderRadius.all(
             Radius.circular(AppSpacing.chipRadius),
           ),
@@ -163,10 +165,7 @@ class _Typing extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.s3),
-        child: SizedBox.square(
-          dimension: AppSpacing.s5,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: AppTypingIndicator(),
       ),
     );
   }

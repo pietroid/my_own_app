@@ -1,8 +1,8 @@
 # The native splash, every platform: `dart run flutter_native_splash:create`.
 flutter_native_splash:
-  color: "#FFFFFF"
+  color: "#121214"
   image: brand/splash.png
   android_12:
     image: brand/splash.png
-    icon_background_color: "#FFFFFF"
+    icon_background_color: "#121214"
   web: true

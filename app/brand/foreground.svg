@@ -1,4 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
   <!-- Android's adaptive foreground: the mark inside the safe zone. -->
-  <circle cx="32" cy="32" r="9" fill="none" stroke="#FFFFFF" stroke-width="3.5"/>
+  <g transform="translate(32 32) scale(0.6) translate(-32 -32)">
+    <rect x="29" y="12" width="6" height="6" rx="1" fill="#EDEDF0"/>
+    <rect x="14" y="20" width="17" height="16" rx="1.5" fill="#FF7438"/>
+    <rect x="33" y="20" width="17" height="16" rx="1.5" fill="#EDEDF0"/>
+    <rect x="14" y="38" width="36" height="14" rx="1.5" fill="#FF7438"/>
+    <rect x="20" y="26" width="5" height="5" fill="#121214"/>
+    <rect x="39" y="26" width="5" height="5" fill="#121214"/>
+    <rect x="27" y="43" width="10" height="3" fill="#121214"/>
+  </g>
 </svg>
