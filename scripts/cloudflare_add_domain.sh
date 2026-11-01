@@ -115,7 +115,7 @@ route_with_api() {
     | .[0].name // empty
   ')
   zone_id=$(cf "$api/zones?name=$zone" | jq -r '.result[0].id // empty')
-  [[ -n $zone_id ]] || { echo "No Cloudflare zone found for $host with this API token" >&2; exit 1 }
+  [[ -n $zone_id ]] || { echo "No Cloudflare zone found for $host with this API token" >&2; exit 1; }
   record=$(jq -n --arg h "$host" --arg t "$tunnel.cfargotunnel.com" \
     '{type: "CNAME", name: $h, content: $t, proxied: true}')
   record_id=$(cf "$api/zones/$zone_id/dns_records?name=$host" | jq -r '.result[0].id // empty')
