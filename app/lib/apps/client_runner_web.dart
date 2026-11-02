@@ -5,8 +5,8 @@ import 'dart:js_interop';
 import 'package:my_own_app/apps/client_runner.dart';
 import 'package:web/web.dart' as web;
 
-/// The web: each run gets a Worker of its own.
-ClientRunner createClientRunner() => const _WorkerRunner();
+/// The web: each run gets a Worker of its own, started before it is needed.
+ClientRunner createClientRunner() => _WorkerRunner();
 
 /// How long one client action may take, its server calls included.
 const _timeout = Duration(seconds: 10);
@@ -18,7 +18,9 @@ const _timeout = Duration(seconds: 10);
 /// Started from a `data:` URL the Worker also has an opaque origin, so not
 /// even what is left can carry the person's cookies. Then it waits for one
 /// `run`, and answers `done` or `error`; each `call` goes out as a message
-/// and comes back as a `reply`.
+/// and comes back as a `reply`. A `run` sent before the Worker has started
+/// waits in its queue, so nothing needs to wait for `ready`; `ready` only
+/// says the Worker did start.
 const _source = r'''
 'use strict';
 const post = self.postMessage.bind(self);
@@ -64,7 +66,16 @@ post(text({ type: 'ready' }));
 ''';
 
 class _WorkerRunner implements ClientRunner {
-  const _WorkerRunner();
+  _WorkerRunner();
+
+  /// A Worker already started and sandboxed, waiting for the next run.
+  _Sandbox? _spare;
+  bool _closed = false;
+
+  @override
+  void warm() {
+    if (!_closed) _spare ??= _Sandbox();
+  }
 
   @override
   Future<List<dynamic>> run({
@@ -73,47 +84,78 @@ class _WorkerRunner implements ClientRunner {
     required Map<String, Object?> event,
     required ServerCall call,
   }) async {
-    final run = jsonEncode({
-      'type': 'run',
-      'code': code,
-      'input': input,
-      'event': event,
-    });
-    final session = _Session(run: run, call: call);
+    if (_closed) throw const ClientActionFailed('closed');
+    final sandbox = _spare ?? _Sandbox();
+    // The next run's Worker starts now, while this one runs.
+    _spare = _Sandbox();
+    final session = _Session(
+      sandbox: sandbox,
+      run: jsonEncode({
+        'type': 'run',
+        'code': code,
+        'input': input,
+        'event': event,
+      }),
+      call: call,
+    );
     try {
       return await session.done.future.timeout(_timeout);
     } on TimeoutException {
       throw const ClientActionFailed('too long');
     } finally {
-      session.close();
+      sandbox.close();
     }
+  }
+
+  @override
+  void close() {
+    _closed = true;
+    _spare?.close();
+    _spare = null;
   }
 }
 
-/// One run: the Worker, and the messages to and from it.
-class _Session {
-  _Session({required this.run, required this.call}) {
-    _start(opaque: true);
+/// One Worker, used for one run at most.
+class _Sandbox {
+  _Sandbox() {
+    _start(opaque: _opaqueWorks);
   }
 
-  final String run;
-  final ServerCall call;
-  final done = Completer<List<dynamic>>();
+  /// Whether this browser starts a Worker from a `data:` URL. Once it has
+  /// refused, later Workers start from the Blob straight away.
+  static bool _opaqueWorks = true;
+
+  static final _dataUrl =
+      'data:text/javascript;charset=utf-8,${Uri.encodeComponent(_source)}';
+
+  static final String _blobUrl = web.URL.createObjectURL(
+    web.Blob(
+      [_source.toJS].toJS,
+      web.BlobPropertyBag(type: 'text/javascript'),
+    ),
+  );
 
   web.Worker? _worker;
-  String? _blobUrl;
   bool _ready = false;
+  bool _closed = false;
 
-  /// What a server call failed with, so the person reads the server's words
-  /// rather than the action's.
-  Object? _callError;
+  /// Why the Worker could not start, before anyone was listening.
+  String? _failed;
+
+  /// The run given to it, sent again if the Worker has to restart.
+  String? _run;
+  void Function(Map<String, dynamic>)? _onMessage;
+  void Function(String)? _onFail;
 
   void _start({required bool opaque}) {
     final web.Worker worker;
     try {
-      worker = web.Worker(_url(opaque: opaque).toJS);
+      worker = web.Worker((opaque ? _dataUrl : _blobUrl).toJS);
     } on Object {
-      if (opaque) return _start(opaque: false);
+      if (opaque) {
+        _opaqueWorks = false;
+        return _start(opaque: false);
+      }
       return _fail('no worker');
     }
     _worker = worker;
@@ -123,24 +165,29 @@ class _Session {
         // A browser that will not start a Worker from a data: URL says so
         // here, before it is ready: start it from a Blob instead.
         if (!_ready && opaque) {
+          _opaqueWorks = false;
           worker.terminate();
           _start(opaque: false);
         } else {
           _fail('worker error');
         }
       }).toJS;
+    final run = _run;
+    if (run != null) post(run);
   }
 
-  String _url({required bool opaque}) {
-    if (opaque) {
-      return 'data:text/javascript;charset=utf-8,'
-          '${Uri.encodeComponent(_source)}';
-    }
-    final blob = web.Blob(
-      [_source.toJS].toJS,
-      web.BlobPropertyBag(type: 'text/javascript'),
-    );
-    return _blobUrl = web.URL.createObjectURL(blob);
+  /// Gives it its one run; what it says from then on goes to [onMessage].
+  void begin(
+    String run, {
+    required void Function(Map<String, dynamic>) onMessage,
+    required void Function(String) onFail,
+  }) {
+    _run = run;
+    _onMessage = onMessage;
+    _onFail = onFail;
+    final failed = _failed;
+    if (failed != null) return onFail(failed);
+    post(run);
   }
 
   void _receive(web.MessageEvent message) {
@@ -152,10 +199,44 @@ class _Session {
     } on Object {
       return;
     }
+    if (msg['type'] == 'ready') {
+      _ready = true;
+      return;
+    }
+    _onMessage?.call(msg);
+  }
+
+  void _fail(String reason) {
+    final onFail = _onFail;
+    onFail != null ? onFail(reason) : _failed = reason;
+  }
+
+  void post(String message) {
+    if (!_closed) _worker?.postMessage(message.toJS);
+  }
+
+  void close() {
+    _closed = true;
+    _worker?.terminate();
+  }
+}
+
+/// One run: the messages to and from its Worker.
+class _Session {
+  _Session({required this.sandbox, required String run, required this.call}) {
+    sandbox.begin(run, onMessage: _receive, onFail: _fail);
+  }
+
+  final _Sandbox sandbox;
+  final ServerCall call;
+  final done = Completer<List<dynamic>>();
+
+  /// What a server call failed with, so the person reads the server's words
+  /// rather than the action's.
+  Object? _callError;
+
+  void _receive(Map<String, dynamic> msg) {
     switch (msg['type']) {
-      case 'ready':
-        _ready = true;
-        _post(run);
       case 'call':
         unawaited(_call(msg));
       case 'done':
@@ -178,22 +259,18 @@ class _Session {
         '${msg['name']}',
         event is Map<String, dynamic> ? event : const {},
       );
-      _post(jsonEncode({'type': 'reply', 'id': msg['id'], 'delta': delta}));
+      sandbox.post(
+        jsonEncode({'type': 'reply', 'id': msg['id'], 'delta': delta}),
+      );
     } on Object catch (error) {
       _callError = error;
-      _post(jsonEncode({'type': 'reply', 'id': msg['id'], 'error': 'failed'}));
+      sandbox.post(
+        jsonEncode({'type': 'reply', 'id': msg['id'], 'error': 'failed'}),
+      );
     }
   }
 
-  void _post(String message) => _worker?.postMessage(message.toJS);
-
   void _fail(String reason) {
     if (!done.isCompleted) done.completeError(ClientActionFailed(reason));
-  }
-
-  void close() {
-    _worker?.terminate();
-    final url = _blobUrl;
-    if (url != null) web.URL.revokeObjectURL(url);
   }
 }

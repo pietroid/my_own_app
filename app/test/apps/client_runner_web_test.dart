@@ -32,6 +32,44 @@ void main() {
     ]);
   });
 
+  test('each run gets a Worker of its own, even back to back', () async {
+    runner.warm();
+    const code =
+        'function run() { const seen = self.seen === 1; self.seen = 1;'
+        ' return [seen]; }';
+    final patches = await Future.wait([
+      for (var i = 0; i < 3; i++)
+        runner.run(
+          code: code,
+          input: const {},
+          event: const {},
+          call: noCall,
+        ),
+    ]);
+    final next = await runner.run(
+      code: code,
+      input: const {},
+      event: const {},
+      call: noCall,
+    );
+    expect([...patches, next], List.filled(4, [false]));
+  });
+
+  test('a closed runner runs nothing', () async {
+    final closed = ClientRunner()
+      ..warm()
+      ..close();
+    await expectLater(
+      closed.run(
+        code: 'function run() { return []; }',
+        input: const {},
+        event: const {},
+        call: noCall,
+      ),
+      throwsA(isA<ClientActionFailed>()),
+    );
+  });
+
   test('has no network', () async {
     final patch = await runner.run(
       code:

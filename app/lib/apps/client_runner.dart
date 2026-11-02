@@ -31,7 +31,6 @@ class ClientActionFailed implements Exception {
 /// Android client actions do not run yet: they fail.
 /// {@endtemplate}
 // One seam with two platforms behind it, and a fake in tests.
-// ignore: one_member_abstracts
 abstract interface class ClientRunner {
   /// {@macro client_runner}
   factory ClientRunner() => platform.createClientRunner();
@@ -44,4 +43,10 @@ abstract interface class ClientRunner {
     required Map<String, Object?> event,
     required ServerCall call,
   });
+
+  /// Gets the next run ready ahead of time, so a tap does not wait for it.
+  void warm();
+
+  /// Lets go of what [warm] got ready; nothing runs after.
+  void close();
 }

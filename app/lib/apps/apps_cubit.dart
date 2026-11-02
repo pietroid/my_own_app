@@ -117,7 +117,9 @@ class AppRunCubit extends Cubit<AppRunState> {
   /// Loads the app as it is on the server.
   Future<void> load() async {
     try {
-      emit(AppRunState(app: await _repository.get(_id)));
+      final app = await _repository.get(_id);
+      if (app.clientActions.isNotEmpty) _runner.warm();
+      emit(AppRunState(app: app));
     } on DioException {
       emit(const AppRunState(loadFailed: true));
     }
@@ -194,5 +196,11 @@ class AppRunCubit extends Cubit<AppRunState> {
 
   void _emitData(Map<String, dynamic> data) {
     emit(AppRunState(app: state.app!.withData(data)));
+  }
+
+  @override
+  Future<void> close() {
+    _runner.close();
+    return super.close();
   }
 }

@@ -23,6 +23,12 @@ class _FakeRunner implements ClientRunner {
       {'op': 'replace', 'path': '/draft', 'value': ''},
     ];
   }
+
+  @override
+  void warm() {}
+
+  @override
+  void close() {}
 }
 
 const _app = AppSnapshot(

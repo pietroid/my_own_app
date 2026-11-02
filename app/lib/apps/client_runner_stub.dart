@@ -13,4 +13,10 @@ class _Unsupported implements ClientRunner {
     required Map<String, Object?> event,
     required ServerCall call,
   }) => Future.error(const ClientActionFailed('not on this platform yet'));
+
+  @override
+  void warm() {}
+
+  @override
+  void close() {}
 }
