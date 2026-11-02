@@ -26,7 +26,9 @@ output are what make a session cheap.
 
 The server's eslint, tsc and tests (under `TZ=UTC`, as CI) run beside the
 app's `flutter analyze`, its own tests and the tests of each changed
-package. A change to `app_ui` or `l10n` tests every package. Each step
+package. A change to `.tool/` runs its own tests (`node --test
+.tool/*.test.mjs`: the queue's review-page link and Pages policy).
+A change to `app_ui` or `l10n` tests every package. Each step
 prints `✓ name (12s)`, or `✗` with the lines that explain it and its log.
 
 ## `preview`: prints of a preview entry point
@@ -199,10 +201,15 @@ moves to main after each pass and the new `queue.mjs` restarts it.
   Send asks for a fine-grained token (this repo only, *Pull requests: read
   and write*), kept in that browser's localStorage. The page is
   `.tool/review.html`, static, published by
-  `.github/workflows/review-page.yml` on every push to `main` or a
-  `queue/*` branch that changes it (the `github-pages` environment allows
-  both), so a PR that changes the page can be reviewed on itself. Pages
-  is on (`setup` turns it on in a fork); without it the link is left out. A line outside the PR's diff makes
+  `.github/workflows/review-page.yml` on every push to `main` (so a
+  missed deploy heals on the next merge) and on a push to a `queue/*`
+  branch that changes the page or the workflow, so a PR that changes the
+  page can be reviewed on itself. `setup` turns Pages on, adds `queue/*`
+  to the `github-pages` environment beside `main`, and dispatches the
+  first deploy; run it again to repair a repo set up before. The queue
+  links the page only once `review.html` answers 200: until then the
+  link is left out and the deploy dispatched (Pages being on serves
+  nothing before a workflow run deploys). A line outside the PR's diff makes
   GitHub refuse the review, and the page sends the drafts as one plain PR
   comment instead, each naming its line.
 - **Phone.** ntfy.sh: install the app and subscribe to the topic `setup`

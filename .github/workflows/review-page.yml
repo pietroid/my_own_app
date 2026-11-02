@@ -2,13 +2,15 @@ name: Review page
 
 # Publishes .tool/review.html on GitHub Pages: the RFC of a PR as a page you
 # comment on from the phone, each comment a PR line comment the queue reads.
-# Needs Pages set to "GitHub Actions" once (.tool/queue setup does it). A
-# queue branch that changes the page deploys it too, so its PR is reviewed on
-# the page it brings; the github-pages environment allows main and queue/*.
+# Needs Pages set to "GitHub Actions" once (.tool/queue setup does it, and
+# dispatches the first deploy). Every push to main deploys, so a missed or
+# failed deploy heals on the next merge. A queue branch deploys only when its
+# push changes the page or this workflow, so its PR is reviewed on the page it
+# brings; the github-pages environment allows main and queue/* (setup adds it).
+# (A path filter can't be set per branch: with both, a push must match both.)
 on:
   push:
     branches: [main, 'queue/**']
-    paths: [.tool/review.html, .github/workflows/review-page.yml]
   workflow_dispatch:
 
 permissions:
@@ -23,11 +25,13 @@ concurrency:
 jobs:
   # Pages may be off: a private repo on a free plan has none, and a repo
   # whose queue was never set up never turned it on. Then there is nothing
-  # to publish to, and the page is skipped rather than failed.
+  # to publish to, and the page is skipped rather than failed. On a queue
+  # branch, a push that doesn't touch the page is skipped too.
   pages:
     runs-on: ubuntu-latest
     outputs:
       on: ${{ steps.check.outputs.on }}
+      publish: ${{ steps.changed.outputs.publish }}
     steps:
       - id: check
         env:
@@ -39,10 +43,31 @@ jobs:
             echo "on=false" >> "$GITHUB_OUTPUT"
             echo "::notice::GitHub Pages is off for this repository; the review page is not published."
           fi
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        with:
+          fetch-depth: 0
+      - id: changed
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != push ] || [ "$GITHUB_REF" = refs/heads/main ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # A new branch has no before (all zeros): compare with main instead.
+          if [ -z "${BEFORE//0/}" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BEFORE=$(git merge-base origin/main "$GITHUB_SHA")
+          fi
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qxE '\.tool/review\.html|\.github/workflows/review-page\.yml'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::This push doesn't change the review page; nothing to publish."
+          fi
 
   publish:
     needs: pages
-    if: needs.pages.outputs.on == 'true'
+    if: needs.pages.outputs.on == 'true' && needs.pages.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

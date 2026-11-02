@@ -315,11 +315,26 @@ export const approves = (said) => said.every((c) => c.kind !== 'line' && isAppro
 const raw = (cfg, sha, path) => `https://raw.githubusercontent.com/${cfg.repo}/${sha}/${path}`;
 
 // The review page (.tool/review.html on GitHub Pages) for the PR's README,
-// once Pages is on: the RFC drawn, commented on by selecting its text.
-export function reviewUrl(cfg, st) {
-  const site = st.pr && st.doc && trySh('gh', ['api', `repos/${cfg.repo}/pages`, '--jq', '.html_url']);
+// once it is served: the RFC drawn, commented on by selecting its text.
+// Pages being on is not enough (it serves nothing until a workflow run
+// deploys), so the page itself must answer 200; when it doesn't, the deploy
+// is dispatched and the link left out, rather than a 404 sent to the phone.
+const pagesSite = (cfg) => trySh('gh', ['api', `repos/${cfg.repo}/pages`, '--jq', '.html_url']);
+const answers200 = (url) => trySh('curl', ['-s', '-L', '-o', '/dev/null', '-m', '10', '-w', '%{http_code}', url]) === '200';
+let dispatchedAt = 0;
+const deployPage = (cfg) => {
+  if (Date.now() - dispatchedAt < 15 * 60e3) return; // a run takes about a minute; once per gate is enough
+  dispatchedAt = Date.now();
+  log(`review page not served: dispatching review-page.yml on main`);
+  trySh('gh', ['workflow', 'run', 'review-page.yml', '-R', cfg.repo, '--ref', 'main']);
+};
+export function reviewUrl(cfg, st, { site = pagesSite, live = answers200, deploy = deployPage } = {}) {
+  const base = st.pr && st.doc && site(cfg);
+  if (!base) return null;
   // Pages answers http:// for a custom domain until its certificate is issued.
-  return site ? `${site.replace(/^http:/, 'https:').replace(/\/?$/, '/')}review.html?repo=${cfg.repo}&pr=${st.pr}&path=${encodeURI(st.doc)}` : null;
+  const page = `${base.replace(/^http:/, 'https:').replace(/\/?$/, '/')}review.html`;
+  if (!live(page)) return deploy(cfg), null;
+  return `${page}?repo=${cfg.repo}&pr=${st.pr}&path=${encodeURI(st.doc)}`;
 }
 const pageLine = (url) => (url ? `\n\n📝 [Read it as a page and comment on its text](${url})` : '');
 const boardOf = (st) => st.doc && posix.join(posix.dirname(st.doc), 'img/mockup-board.png');
@@ -755,6 +770,23 @@ const LABELS = [
   ['agent:done', 'cccccc', 'Merged by the queue'],
 ];
 
+// queue/* among the github-pages environment's deployment branches, added
+// if missing (with main, should the environment have had no custom policies).
+// True when it is there afterwards.
+export function pagesPolicy(repo, api = (args, input) => JSON.parse(trySh('gh', ['api', ...args], input === undefined ? {} : { input }) || 'null')) {
+  const env = `repos/${repo}/environments/github-pages`;
+  const names = () => api([`${env}/deployment-branch-policies`, '--jq', '[.branch_policies[].name]']) ?? [];
+  const custom = api([env, '--jq', '.deployment_branch_policy.custom_branch_policies']);
+  if (custom !== true) {
+    api(['-X', 'PUT', env, '--input', '-'], JSON.stringify({ deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }));
+  }
+  const have = names();
+  for (const name of ['main', 'queue/*']) {
+    if (!have.includes(name)) api(['-X', 'POST', `${env}/deployment-branch-policies`, '-f', `name=${name}`, '-f', 'type=branch']);
+  }
+  return names().includes('queue/*');
+}
+
 async function setup() {
   const old = readJson(configPath, {});
   const repo = ghJson(['repo', 'view', '--json', 'nameWithOwner']).nameWithOwner;
@@ -771,6 +803,12 @@ async function setup() {
   // Pages built by Actions, for the review page (.github/workflows/review-page.yml).
   const pages = trySh('gh', ['api', `repos/${repo}/pages`, '--jq', '.html_url'])
     ?? trySh('gh', ['api', '-X', 'POST', `repos/${repo}/pages`, '-f', 'build_type=workflow', '--jq', '.html_url']);
+  // Turning Pages on serves nothing: a workflow run deploys. And the
+  // github-pages environment allows main only until queue/* is added, so a
+  // queue branch that changes the page could not deploy it. Both repaired on
+  // every setup, so running it again fixes a repo set up before.
+  const queuePolicy = pages && pagesPolicy(repo);
+  if (pages) trySh('gh', ['workflow', 'run', 'review-page.yml', '-R', repo, '--ref', 'main']);
 
   const runner = syncRunner(cfg);
   writeQueuePlist(runner, process.execPath, process.env.PATH);
@@ -778,7 +816,8 @@ async function setup() {
   await push(cfg, { title: 'My Own App queue is on', message: `Watching ${repo} for issues labelled ${KINDS.join(', ')}.`, tags: ['white_check_mark'], click: `https://github.com/${repo}/issues` });
   console.log(`✓ labels on ${repo}, LaunchAgent ${AGENT} loaded, test push sent
   ✓ runs from ${runner}, at origin/main (${git(runner, 'rev-parse', '--short', 'HEAD')}), moved to its tip every pass
-  ${pages ? `✓ review page: ${pages}review.html (live after the next push to main or a queue/* branch touching it, or: gh workflow run review-page.yml)` : '✗ GitHub Pages could not be turned on: Settings → Pages → Source: GitHub Actions'}
+  ${pages ? `✓ review page: ${pages}review.html (deploying now, and on every push to main; gh run list --workflow review-page.yml)` : '✗ GitHub Pages could not be turned on: Settings → Pages → Source: GitHub Actions'}
+  ${!pages ? '' : queuePolicy ? '✓ github-pages environment allows main and queue/*' : '✗ could not add queue/* to the github-pages environment: Settings → Environments → github-pages'}
   phone: install ntfy (App Store / Play Store), tap +, topic ${cfg.topic}, server ntfy.sh
          (or open https://ntfy.sh/${cfg.topic} on the phone)
   then open an issue with the "Create" template and watch for the 👀`);

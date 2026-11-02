@@ -62,10 +62,87 @@ The RFC itself needs no change. The page reads PR #2's README from the GitHub AP
 - This PR's own branch (`queue/3-…`) changes the workflow, so its push deploys from a queue branch: the run shows **success**, which proves the policy.
 - `node --test` on `.tool/` for `reviewUrl` (a 404 page means no link and one dispatch), and `.tool/check`.
 
-## Build brief
+## 3. What was built
 
-- **Change**: `.github/workflows/review-page.yml` (triggers, plus the diff job and the publish condition); `.tool/queue.mjs` (`setup`: branch policy and dispatch; `reviewUrl`: liveness check plus dispatch, with the HTTP check kept injectable for a test); `.tool/README.md` and the workflow's header comment.
-- **Run once, on GitHub**: add the `queue/*` policy, dispatch the workflow on `main`, re-sync PR #2's body (or just confirm its link now answers 200).
-- **Decided unattended**: the track (plan); "latest RFC" read as PR #2's review-page link, since the RFC itself isn't approved, so it doesn't land on `main`; every row of the Decisions table above.
-- **Open questions**: none blocking. If you'd rather not redeploy on every `main` push, say so, and decision 1 becomes path filter plus `setup` dispatch.
-- **Cost**: the queue measures this run and writes the figures in the PR.
+### The contract
+
+**The review page is linked only once it's served.** `main` deploys it on every push, so it heals itself. A `queue/*` branch deploys it only when that branch changes it. The queue never sends a link to a page that isn't answering 200.
+
+### The files
+
+| File | What changed |
+|---|---|
+| `.github/workflows/review-page.yml` | `push` on `main` and `queue/**` with no path filter. The `pages` job also works out `publish`: true on `main` and on a dispatch; on a queue branch, true only when `git diff --name-only <before> <sha>` touches `.tool/review.html` or the workflow. When the branch is new (an all-zero `before`), it diffs from the merge base with `main` instead. `publish` runs when Pages is on **and** `publish` is true |
+| `.tool/queue.mjs` `reviewUrl` | Asks Pages for the site, then checks `<site>review.html` (`curl`, 10 s, following redirects). If it isn't 200, it returns `null` and dispatches `review-page.yml` on `main`, at most once every 15 minutes. The three steps (site, liveness, deploy) can be swapped out for tests |
+| `.tool/queue.mjs` `pagesPolicy` (new) | Makes sure `github-pages` uses custom branch policies, then adds `main` and `queue/*` if they're missing. Returns whether `queue/*` is there afterwards. Safe to run again |
+| `.tool/queue.mjs` `setup` | After Pages is on: runs `pagesPolicy`, dispatches the first deploy, and prints a ✓/✗ line for each |
+| `.tool/queue.test.mjs` (new) | 6 `node:test` cases: a link on 200 (`http`→`https`), no link plus one deploy on 404, nothing asked without Pages, PR or doc, and `pagesPolicy` in three starting states |
+| `.tool/check` | A `tool-test` step (`node --test .tool/*.test.mjs`) runs when anything under `.tool/` changes |
+| `.tool/README.md` | § *Commenting on the page* now says what is actually done. § `check` names the new step |
+
+### The proof, run
+
+```
+$ node --test .tool/queue.test.mjs
+✔ reviewUrl links the page when it answers 200, on https
+✔ reviewUrl leaves a 404 page out and dispatches the deploy once
+✔ reviewUrl without Pages, a PR or a doc asks nothing more
+✔ pagesPolicy adds queue/* when only main is allowed
+✔ pagesPolicy writes nothing when queue/* is there
+✔ pagesPolicy turns custom policies on, then adds main and queue/*
+ℹ tests 6  pass 6  fail 0
+
+$ .tool/check
+✓ tool-test (1s)
+```
+
+The real `reviewUrl` run against this repo today, with only the dispatch stubbed out. Pages is on, the page is still 404, so no link is made:
+
+```
+$ curl -s -o /dev/null -w '%{http_code}' https://pietroteruya.dev/my_own_app/review.html
+404
+$ node -e "…reviewUrl({repo:'pietroid/my_own_app'},{pr:2,doc:'…apps-as-data/README.md'},{deploy:stub})"
+(would dispatch review-page.yml)
+null
+```
+
+The workflow's `publish` decision, run in a scratch repo with the step's own script:
+
+```
+main: publish=true
+queue, page changed: publish=true
+queue, new branch: publish=true
+queue, no change: publish=false
+```
+
+### Where the build differs from the plan
+
+- **The one-time repair on GitHub was not run.** The plan had this run add `queue/*` to the `github-pages` environment, dispatch the deploy on `main`, and re-sync PR #2. The sandbox's permission check refused those writes to the shared repo, and I didn't work around it. So today the environment still allows only `main`, and the page is still a 404. Section 4 has the two commands. Without them, the page goes live on the first push to `main` after this PR merges, since `main` now always deploys.
+- **This PR's own deploy run will fail.** Its branch changes the workflow, so the queue's push asks for a deploy from `queue/3-…`, and the environment refuses that until `queue/*` is added. It's the bug this PR fixes, not a new one, and it doesn't block the merge (the workflow isn't a required check). Once `queue/*` is added, re-running that run proves the policy, which is the plan's last proof.
+- **Added:** the `.tool/check` step. The plan named `node --test`, but nothing ran `.tool/` tests, so it now runs whenever `.tool/` changes.
+- No `product/spec/` file. This is internal tooling, and its spec is `.tool/README.md`, which was updated.
+
+### Decided unattended
+
+- Every row of the Decisions table in section 2, as approved.
+- The repair commands are left to you (see above) rather than run another way.
+- At most one deploy dispatch every 15 minutes from a running queue. A gate calls `reviewUrl` twice (the PR body and the comment), and a run takes about a minute.
+
+## 4. How to turn it on
+
+Run once, from the main checkout, after this merges (or before, to see this PR's run go green):
+
+```bash
+.tool/queue setup     # adds queue/* to github-pages, dispatches the deploy on main
+# or by hand:
+gh api -X POST repos/pietroid/my_own_app/environments/github-pages/deployment-branch-policies -f name='queue/*' -f type=branch
+gh workflow run review-page.yml --ref main
+```
+
+Then `gh run list --workflow review-page.yml -L 1` shows success, and `curl -s -o /dev/null -w '%{http_code}' https://pietroteruya.dev/my_own_app/review.html` prints 200. PR #2's link already points there, so it starts working without an edit. The next gate the queue reaches writes the link into the PR body again either way.
+
+Without the commands: the merge itself deploys `main`, and the page comes up. Until `queue/*` is added, only a queue branch that changes the page can't deploy it. Nothing needs a new secret or env var.
+
+## 5. Cost and time
+
+Measured by the queue: see the pull request. There was no spend outside Claude: Actions minutes on a public repo are free.
