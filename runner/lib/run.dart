@@ -16,7 +16,7 @@ import 'package:dart_eval/stdlib/core.dart';
 /// Which runner writes and reads bytecode: dart_eval's version and our
 /// changes to it. Bytecode runs only on the runner that wrote it; bump the
 /// last number when a change to `third_party/` changes what runs.
-const runnerVersion = 'dart_eval-0.8.5+steps.1';
+const runnerVersion = 'dart_eval-0.8.5+steps.1+nullable-as.1';
 
 /// How many interpreter steps one run may take, its continuations after
 /// each `await` included. About 50 ms of work on a phone; the time spent

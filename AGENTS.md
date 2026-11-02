@@ -120,11 +120,15 @@ of A2UI (Column, Row, List, Text, TextField, CheckBox, Button; the one with
 id `root` is the screen), bound to `data` by JSON Pointer; `data`, one JSON
 document; and `actions`, `Future<List> run(Map input, Map event, Function
 call) async` in **Dart**, given only the paths it declares and answering
-with a JSON Patch. An action runs `on`
-`"server"` (the default: its patch is kept) or `"client"` (on the device,
-instantly; its patch only changes the screen and is not kept). A client
-action may `await call(name, event)` a server action: the app posts it to
-the API, applies the kept patch, and hands it back.
+with a JSON Patch. **Every action runs on the device first**, so a tap
+changes the screen at once. An action is `on` `"server"` (the default:
+saved; after showing its patch the app sends the tap to the server, one at
+a time and in order, which runs the same action on its own copy and keeps
+the patch; a different answer or a refusal reloads the server's copy) or
+`"client"` (screen-only, never sent). A client action may `await call(name,
+event)` a saved one, which works the same way. What a person types lives
+only on the device, so a saved action reads it from the event (a button's
+`context`), never from `input`.
 
 - `POST /api/apps { prompt }` is one forced `create_app` tool call (and one
   retry with the error), checked by `parseBundle`. The prompt is
@@ -145,12 +149,12 @@ the API, applies the kept patch, and hands it back.
 - `POST /api/apps/:id/actions/:name { event }` runs the action there,
   applies the patch under a `rev` check and answers it as an AG-UI
   `STATE_DELTA`; the app applies the same patch. It refuses a client action.
-- `GET /api/apps/:id` sends the bytecode of the client actions only
-  (`clientActions`); a server action never leaves the server, and no
-  action's source does.
-- The app runs client actions with the same `run.dart`, on the web, iOS
-  and Android alike (`app/lib/apps/client_runner.dart`), on the main
-  isolate: the step budget is what keeps a runaway action from freezing it.
+- `GET /api/apps/:id` sends every action's bytecode (`actions: { name: {
+  on, input, evc } }`); no action's source leaves the server.
+- The app runs actions with the same `run.dart`, on the web, iOS and
+  Android alike (`app/lib/apps/client_runner.dart`), on the main isolate:
+  the step budget is what keeps a runaway action from freezing it.
+  `AppRunCubit` holds the local-first rules.
 - The whole contract, the runner's protocol and its limits:
   [product/spec/actions.md](./product/spec/actions.md).
 - On a window at least `AppSpacing.phoneFrameBreakpoint` wide, the app runs
@@ -197,6 +201,7 @@ npm run start:local     # watches; needs server/.env.local (see .env.example)
 npm test
 npm run db:generate     # after editing src/db/schema.ts; commit drizzle/
 npm run apps:rebuild    # after a build: rebuild apps whose actions were never compiled
+                        # (-- --all: every app, from fresh data, after BUILD_PROMPT changed)
 
 # Action runner (Dart, used by the server and the app)
 cd runner && dart test && dart test -p chrome

@@ -18,12 +18,24 @@ class AppSummary extends Equatable {
   List<Object?> get props => [id, name];
 }
 
-/// {@template client_action}
-/// An action the device runs itself: what it reads, and its bytecode.
+/// {@template app_action}
+/// One of an app's actions, as the device runs it: whether it is saved,
+/// what it reads, and its bytecode.
 /// {@endtemplate}
-class ClientAction extends Equatable {
-  /// {@macro client_action}
-  const ClientAction({required this.input, required this.evc});
+class AppAction extends Equatable {
+  /// {@macro app_action}
+  const AppAction({required this.input, required this.evc, this.saved = true});
+
+  /// From one entry of `actions` in `GET /apps/:id`.
+  factory AppAction.fromJson(Map<String, dynamic> json) => AppAction(
+    saved: json['on'] != 'client',
+    input: [for (final path in json['input'] as List<dynamic>) '$path'],
+    evc: json['evc'] as String,
+  );
+
+  /// Whether the server keeps what it changes (`on: "server"`); a client
+  /// action only changes the screen.
+  final bool saved;
 
   /// The JSON Pointers it reads.
   final List<String> input;
@@ -33,12 +45,12 @@ class ClientAction extends Equatable {
   final String evc;
 
   @override
-  List<Object?> get props => [input, evc];
+  List<Object?> get props => [saved, input, evc];
 }
 
 /// {@template app_snapshot}
-/// A built app as the server sends it: its screen, its data, and the
-/// actions the device runs itself (a server action's code stays there).
+/// A built app as the server sends it: its screen, its data, and every
+/// action, which the device runs itself.
 /// {@endtemplate}
 class AppSnapshot extends Equatable {
   /// {@macro app_snapshot}
@@ -47,7 +59,7 @@ class AppSnapshot extends Equatable {
     required this.name,
     required this.ui,
     required this.data,
-    this.clientActions = const {},
+    this.actions = const {},
   });
 
   /// From `GET /apps/:id`.
@@ -59,18 +71,10 @@ class AppSnapshot extends Equatable {
         component as Map<String, dynamic>,
     ],
     data: json['data'] as Map<String, dynamic>,
-    clientActions: {
+    actions: {
       for (final MapEntry(:key, :value)
-          in (json['clientActions'] as Map<String, dynamic>? ?? const {})
-              .entries)
-        key: ClientAction(
-          input: [
-            for (final path
-                in (value as Map<String, dynamic>)['input'] as List<dynamic>)
-              '$path',
-          ],
-          evc: value['evc'] as String,
-        ),
+          in (json['actions'] as Map<String, dynamic>? ?? const {}).entries)
+        key: AppAction.fromJson(value as Map<String, dynamic>),
     },
   );
 
@@ -86,8 +90,8 @@ class AppSnapshot extends Equatable {
   /// The app's whole state.
   final Map<String, dynamic> data;
 
-  /// The actions the device runs, by name.
-  final Map<String, ClientAction> clientActions;
+  /// Its actions, by name.
+  final Map<String, AppAction> actions;
 
   /// This app with other [data].
   AppSnapshot withData(Map<String, dynamic> data) => AppSnapshot(
@@ -95,11 +99,11 @@ class AppSnapshot extends Equatable {
     name: name,
     ui: ui,
     data: data,
-    clientActions: clientActions,
+    actions: actions,
   );
 
   @override
-  List<Object?> get props => [id, name, ui, data, clientActions];
+  List<Object?> get props => [id, name, ui, data, actions];
 }
 
 /// {@template apps_repository}

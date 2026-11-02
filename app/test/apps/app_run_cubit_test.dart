@@ -1,101 +1,177 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:action_runner/compile.dart';
+import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:my_own_app/apps/apps_cubit.dart';
 import 'package:my_own_app/apps/apps_repository.dart';
-import 'package:my_own_app/apps/client_runner.dart';
 
 class _MockRepository extends Mock implements AppsRepository {}
 
-/// Stands in for the interpreter: does what the to-do's client `add` does.
-class _FakeRunner implements ClientRunner {
-  Map<String, Object?>? input;
+// The device never compiles; the tests do, as the server would.
+String _evc(String code) => base64Encode(compileAction(code));
 
-  @override
-  Future<List<dynamic>> run({
-    required String evc,
-    required Map<String, Object?> input,
-    required Map<String, Object?> event,
-    required ServerCall call,
-  }) async {
-    this.input = input;
-    await call('add_todo', {'title': input['/draft']});
-    return [
-      {'op': 'replace', 'path': '/draft', 'value': ''},
-    ];
-  }
+final String _addTodo = _evc('''
+Future<List> run(Map input, Map event, Function call) async {
+  final title = (event['title'] as String? ?? '').trim();
+  if (title.isEmpty) return [];
+  return [
+    {'op': 'add', 'path': '/todos/-', 'value': {'title': title, 'done': false}},
+    {'op': 'replace', 'path': '/draft', 'value': ''},
+  ];
 }
+''');
 
-const _app = AppSnapshot(
+final String _filter = _evc('''
+Future<List> run(Map input, Map event, Function call) async {
+  final List kept = await call('add_todo', {'title': 'Leite'});
+  return [{'op': 'replace', 'path': '/filter', 'value': kept.length}];
+}
+''');
+
+final _app = AppSnapshot(
   id: 'a',
   name: 'Tarefas',
-  ui: [],
-  data: {'draft': '', 'todos': <Object?>[]},
-  clientActions: {
-    'add': ClientAction(input: ['/draft'], evc: 'AAAA'),
+  ui: const [],
+  data: const {'draft': '', 'filter': 0, 'todos': <Object?>[]},
+  actions: {
+    'add_todo': AppAction(input: const [], evc: _addTodo),
+    'show': AppAction(input: const [], evc: _filter, saved: false),
+    'old': const AppAction(input: [], evc: 'AAAA'),
   },
 );
 
+List<Map<String, Object?>> _added(String title) => [
+  {
+    'op': 'add',
+    'path': '/todos/-',
+    'value': {'title': title, 'done': false},
+  },
+  {'op': 'replace', 'path': '/draft', 'value': ''},
+];
+
+List<Object?> _todos(AppRunCubit cubit) =>
+    cubit.state.app!.data['todos'] as List<Object?>;
+
 void main() {
   late _MockRepository repository;
-  late _FakeRunner runner;
 
   setUp(() {
     repository = _MockRepository();
-    runner = _FakeRunner();
     when(() => repository.get('a')).thenAnswer((_) async => _app);
   });
 
-  test('a client action calls a server one, then patches the screen', () async {
-    when(() => repository.act('a', 'add_todo', {'title': 'Pão'})).thenAnswer(
-      (_) async => [
-        {
-          'op': 'add',
-          'path': '/todos/-',
-          'value': {'title': 'Pão', 'done': false},
-        },
-      ],
-    );
-    final cubit = AppRunCubit(repository: repository, id: 'a', runner: runner);
+  Future<AppRunCubit> open() async {
+    final cubit = AppRunCubit(repository: repository, id: 'a');
     await cubit.load();
+    return cubit;
+  }
+
+  test('a saved action shows its patch before the server answers', () async {
+    final answer = Completer<List<dynamic>>();
+    when(
+      () => repository.act('a', 'add_todo', {'title': 'Pão'}),
+    ).thenAnswer((_) => answer.future);
+    final cubit = await open();
     cubit.edit('/draft', 'Pão');
 
-    await cubit.act('add', const {});
+    await cubit.act('add_todo', {'title': 'Pão'});
 
-    expect(runner.input, {'/draft': 'Pão'});
-    expect(cubit.state.app!.data, {
-      'draft': '',
-      'todos': [
-        {'title': 'Pão', 'done': false},
-      ],
-    });
-    expect(cubit.state.error, isNull);
+    expect(_todos(cubit), [
+      {'title': 'Pão', 'done': false},
+    ]);
+    expect(cubit.state.app!.data['draft'], '');
+
+    // The server agrees: nothing is applied twice, nothing reloads.
+    answer.complete(_added('Pão'));
+    await pumpEventQueue();
+    expect(_todos(cubit), hasLength(1));
+    verify(() => repository.get('a')).called(1);
   });
 
-  test('a server action goes straight to the server', () async {
-    when(() => repository.act('a', 'clear', const {})).thenAnswer(
+  test('saved actions reach the server one at a time, in order', () async {
+    final first = Completer<List<dynamic>>();
+    final sent = <String>[];
+    when(() => repository.act('a', 'add_todo', any())).thenAnswer((call) {
+      final title = (call.positionalArguments[2] as Map)['title'] as String;
+      sent.add(title);
+      return title == 'Pão' ? first.future : Future.value(_added(title));
+    });
+    final cubit = await open();
+
+    await cubit.act('add_todo', {'title': 'Pão'});
+    await cubit.act('add_todo', {'title': 'Leite'});
+    await pumpEventQueue();
+
+    expect(_todos(cubit), hasLength(2));
+    expect(sent, ['Pão']);
+    first.complete(_added('Pão'));
+    await pumpEventQueue();
+    expect(sent, ['Pão', 'Leite']);
+  });
+
+  test("when the server's patch differs, its copy is loaded", () async {
+    when(
+      () => repository.act('a', 'add_todo', any()),
+    ).thenAnswer((_) async => _added('Outro'));
+    final cubit = await open();
+
+    await cubit.act('add_todo', {'title': 'Pão'});
+    await pumpEventQueue();
+
+    verify(() => repository.get('a')).called(2);
+    expect(_todos(cubit), isEmpty);
+  });
+
+  test('a refusal brings back the server copy and says why', () async {
+    when(() => repository.act('a', 'add_todo', any())).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(),
+        response: Response(
+          requestOptions: RequestOptions(),
+          statusCode: 409,
+          data: {'message': 'O app mudou enquanto isso. Tente de novo.'},
+        ),
+      ),
+    );
+    final cubit = await open();
+
+    await cubit.act('add_todo', {'title': 'Pão'});
+    expect(_todos(cubit), hasLength(1));
+    await pumpEventQueue();
+
+    expect(_todos(cubit), isEmpty);
+    expect(cubit.state.error, 'O app mudou enquanto isso. Tente de novo.');
+  });
+
+  test('a client action is not sent; the saved one it calls is', () async {
+    when(
+      () => repository.act('a', 'add_todo', {'title': 'Leite'}),
+    ).thenAnswer((_) async => _added('Leite'));
+    final cubit = await open();
+
+    await cubit.act('show', const {});
+    await pumpEventQueue();
+
+    expect(cubit.state.app!.data['filter'], 2);
+    expect(_todos(cubit), hasLength(1));
+    verifyNever(() => repository.act('a', 'show', any()));
+    verify(() => repository.act('a', 'add_todo', {'title': 'Leite'})).called(1);
+  });
+
+  test('an action this app cannot run waits for the server', () async {
+    when(() => repository.act('a', 'old', const {})).thenAnswer(
       (_) async => [
         {'op': 'replace', 'path': '/draft', 'value': 'x'},
       ],
     );
-    final cubit = AppRunCubit(repository: repository, id: 'a', runner: runner);
-    await cubit.load();
+    final cubit = await open();
 
-    await cubit.act('clear', const {});
+    await cubit.act('old', const {});
 
     expect(cubit.state.app!.data['draft'], 'x');
-    expect(runner.input, isNull);
-  });
-
-  test('a client action that cannot run says so', () async {
-    final cubit = AppRunCubit(
-      repository: repository,
-      id: 'a',
-      runner: ClientRunner(),
-    );
-    await cubit.load();
-
-    await cubit.act('add', const {});
-
-    expect(cubit.state.error, '');
+    expect(cubit.state.error, isNull);
   });
 }

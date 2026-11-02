@@ -13,15 +13,19 @@ import { Bundle, InvalidBundleError, parseBundle } from './bundle';
 import { ActionFailedError, ActionRunner } from './runner';
 
 /**
- * An app as the app reads it. Of the actions, only the client ones go out,
- * as bytecode (the device runs them); a server action stays here.
+ * An app as the app reads it. Every action goes out as bytecode: the device
+ * runs each one at once, and sends the saved ones here to be kept. No
+ * action's source goes out.
  */
 export interface AppSnapshot {
   id: string;
   name: string;
   ui: Bundle['ui'];
   data: Record<string, unknown>;
-  clientActions: Record<string, { input: string[]; evc: string }>;
+  actions: Record<
+    string,
+    { on: 'server' | 'client'; input: string[]; evc: string }
+  >;
   rev: number;
 }
 
@@ -67,18 +71,20 @@ export class AppsService {
 
   async get(userId: string, id: string): Promise<AppSnapshot> {
     const row = await this._row(userId, id);
-    const clientActions: AppSnapshot['clientActions'] = {};
+    const actions: AppSnapshot['actions'] = {};
     for (const [name, def] of Object.entries(row.actions)) {
-      if (def.on === 'client') {
-        clientActions[name] = { input: def.input, evc: def.evc! };
-      }
+      actions[name] = {
+        on: def.on ?? 'server',
+        input: def.input,
+        evc: def.evc!,
+      };
     }
     return {
       id: row.id,
       name: row.name,
       ui: row.ui as Bundle['ui'],
       data: row.data as Record<string, unknown>,
-      clientActions,
+      actions,
       rev: row.rev,
     };
   }
@@ -146,11 +152,13 @@ export class AppsService {
   }
 
   /**
-   * Builds the app again from the words it was built from, for an app
-   * whose actions no longer compile (the JS ones from before Dart). Its
-   * data is kept when the new app keeps the same top-level keys.
+   * Builds the app again from the words it was built from: for an app
+   * whose actions no longer compile (the JS ones from before Dart), or for
+   * every app when the build prompt changed. Its data is kept when
+   * [keepData] and the new app keeps the same top-level keys; otherwise it
+   * starts from the new app's initial data.
    */
-  async rebuild(id: string): Promise<void> {
+  async rebuild(id: string, { keepData = true } = {}): Promise<void> {
     const [row] = await this._db
       .select()
       .from(generatedApp)
@@ -159,11 +167,20 @@ export class AppsService {
     const bundle = await this._build(row.prompt);
     const old = row.data as Record<string, unknown>;
     const sameShape =
+      keepData &&
       Object.keys(old).sort().join() === Object.keys(bundle.data).sort().join();
     await this._db
       .update(generatedApp)
       .set({ ...bundle, data: sameShape ? old : bundle.data, rev: row.rev + 1 })
       .where(eq(generatedApp.id, id));
+  }
+
+  /** Every app's id, everyone's. */
+  async all(): Promise<string[]> {
+    const rows = await this._db
+      .select({ id: generatedApp.id })
+      .from(generatedApp);
+    return rows.map((row) => row.id);
   }
 
   /**
@@ -324,9 +341,9 @@ An app is three things:
 
 The Dart runs in an interpreter (dart_eval) that supports a subset of the language. Use only: functions, local variables (final/var), if/else, for, for-in, while, switch statements, String/int/double/bool/List/Map and their common methods (map, where, toList, length, isEmpty, trim, contains, indexOf, add, removeAt, keys, values), string interpolation, collection literals, and as casts. Never use: imports, classes, mixins, extension methods, late, typedefs, generators (sync*/async*), switch expressions, records, patterns, DateTime.now, Random, print. Every value from input or event is dynamic: cast it before use ((input['/todos'] as List), (event['title'] as String? ?? '')). run is always async, even when it awaits nothing.
 
-Where an action runs:
-- "server" (the default): on the server; its patch is saved. Anything that must still be there tomorrow is a server action.
-- "client": on the person's device, instantly; its patch only changes what is on screen and is not saved. Use it for screen-only state (a filter, a tab, a counter that need not be kept) and to check or prepare input before a server action. Its third argument, call: "final List kept = await call('add_todo', {'title': title});" runs a server action (its patch is saved and applied first) and resolves to that patch. A client action never calls another client action.
+Where an action runs. Every action runs on the person's device the moment they tap, so the screen changes at once; what differs is whether the change is saved:
+- "server" (the default): saved. The device shows its patch at once, then the server runs the same action on its own copy of the data and keeps the patch. Anything that must still be there tomorrow is a server action, and most actions are. Because it also runs on the server, where nothing typed on the device exists, a server action reads what the person typed only from the event (a button's context, {"title": {"path": "/draft"}}), never from input; input is for saved data (the list, a total). It can clear the field in the same patch.
+- "client": not saved; only for screen-only state (a filter, a tab, a form step). Its third argument, call: "final List kept = await call('save_item', {'title': title});" runs a server action and resolves to its patch. Never write a client action that only calls a server one: write the server action and point the button at it.
 
 Components (every one has "id" and "component"):
 - Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index".
@@ -346,15 +363,14 @@ Example, a to-do list:
   {"id": "title", "component": "Text", "text": "Minhas tarefas", "variant": "title"},
   {"id": "form", "component": "Row", "children": ["field", "add"]},
   {"id": "field", "component": "TextField", "label": "Nova tarefa", "value": {"path": "/draft"}},
-  {"id": "add", "component": "Button", "label": "Adicionar", "action": {"event": {"name": "add"}}},
+  {"id": "add", "component": "Button", "label": "Adicionar", "action": {"event": {"name": "add_todo", "context": {"title": {"path": "/draft"}}}}},
   {"id": "list", "component": "List", "children": {"componentId": "item", "path": "/todos"}},
   {"id": "item", "component": "Row", "children": ["check", "remove"]},
   {"id": "check", "component": "CheckBox", "label": {"path": "title"}, "value": {"path": "done"}, "action": {"event": {"name": "toggle_todo", "context": {"done": {"path": "done"}}}}},
   {"id": "remove", "component": "Button", "label": "Remover", "action": {"event": {"name": "remove_todo"}}}
  ],
  "actions": {
-  "add": {"on": "client", "input": ["/draft"], "code": "Future<List> run(Map input, Map event, Function call) async { final title = (input['/draft'] as String? ?? '').trim(); if (title.isEmpty) return []; await call('add_todo', {'title': title}); return [{'op': 'replace', 'path': '/draft', 'value': ''}]; }"},
-  "add_todo": {"on": "server", "input": [], "code": "Future<List> run(Map input, Map event, Function call) async { final title = (event['title'] as String? ?? '').trim(); if (title.isEmpty) return []; return [{'op': 'add', 'path': '/todos/-', 'value': {'title': title, 'done': false}}]; }"},
+  "add_todo": {"on": "server", "input": [], "code": "Future<List> run(Map input, Map event, Function call) async { final title = (event['title'] as String? ?? '').trim(); if (title.isEmpty) return []; return [{'op': 'add', 'path': '/todos/-', 'value': {'title': title, 'done': false}}, {'op': 'replace', 'path': '/draft', 'value': ''}]; }"},
   "toggle_todo": {"on": "server", "input": [], "code": "Future<List> run(Map input, Map event, Function call) async { final path = event['itemPath'] as String; return [{'op': 'replace', 'path': '$path/done', 'value': event['done'] != true}]; }"},
   "remove_todo": {"on": "server", "input": [], "code": "Future<List> run(Map input, Map event, Function call) async { return [{'op': 'remove', 'path': event['itemPath'] as String}]; }"}
  }}`;

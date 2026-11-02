@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:api_client/api_client.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -71,6 +74,11 @@ class AppsCubit extends Cubit<AppsState> {
         ),
       );
       return null;
+    } on Object {
+      // An answer this app cannot read (or any other failure) ends the
+      // build like a refusal does: never a spinner that stays.
+      emit(AppsState(apps: state.apps, failed: true));
+      return null;
     }
   }
 }
@@ -96,10 +104,15 @@ class AppRunState extends Equatable {
 }
 
 /// {@template app_run_cubit}
-/// Runs one app. A server action goes to the server, which runs it and
-/// answers with a JSON Patch, applied here to the same data. A client action
-/// runs on the device ([ClientRunner]); the server actions it calls are
-/// applied as they answer, then its own patch, which is not kept.
+/// Runs one app, every tap on the device first ([ClientRunner]), so the
+/// screen changes at once.
+///
+/// A saved action (`on: "server"`) is then sent to the server, one at a
+/// time and in order, which runs the same action on its own copy and keeps
+/// the patch. When the server's patch is the one shown, nothing more
+/// happens; when it differs, or the server refuses, the server's copy is
+/// loaded again (and the refusal shown). A client action's patch only
+/// changes the screen; the saved actions it `call`s work as above.
 /// {@endtemplate}
 class AppRunCubit extends Cubit<AppRunState> {
   /// {@macro app_run_cubit}
@@ -114,12 +127,16 @@ class AppRunCubit extends Cubit<AppRunState> {
   final String _id;
   final ClientRunner _runner;
 
+  /// The saved actions on their way to the server, one after another.
+  Future<void> _sending = Future.value();
+
   /// Loads the app as it is on the server.
   Future<void> load() async {
     try {
-      emit(AppRunState(app: await _repository.get(_id)));
+      final app = await _repository.get(_id);
+      if (!isClosed) emit(AppRunState(app: app));
     } on DioException {
-      emit(const AppRunState(loadFailed: true));
+      if (!isClosed) emit(const AppRunState(loadFailed: true));
     }
   }
 
@@ -136,30 +153,19 @@ class AppRunCubit extends Cubit<AppRunState> {
   }
 
   /// Runs [action] with [event] and applies what it changed.
+  ///
+  /// The returned future ends when the screen has changed, not when the
+  /// server has kept it.
   Future<void> act(String action, Map<String, Object?> event) async {
-    final app = state.app;
-    if (app == null) return;
-    final client = app.clientActions[action];
+    final def = state.app?.actions[action];
+    if (def == null) return;
     try {
-      if (client == null) {
-        await _server(action, event);
+      if (def.saved) {
+        await _saved(action, event);
         return;
       }
-      final patch = await _runner.run(
-        evc: client.evc,
-        input: {
-          for (final path in client.input) path: valueAt(app.data, path),
-        },
-        event: event,
-        call: _server,
-      );
-      final now = state.app;
-      if (now == null) return;
-      try {
-        _emitData(applyPatch(now.data, patch));
-      } on Object {
-        throw const ClientActionFailed('bad patch');
-      }
+      final patch = await _run(def, event, call: _saved);
+      _apply(patch);
     } on DioException catch (error) {
       _emitError(serverMessage(error) ?? '');
     } on ClientActionFailed {
@@ -167,32 +173,87 @@ class AppRunCubit extends Cubit<AppRunState> {
     }
   }
 
-  /// One server action: the server keeps its patch, and so does this side.
-  Future<List<dynamic>> _server(
+  /// A saved action: shown at once, then sent to the server in order.
+  /// Answers with the patch shown.
+  ///
+  /// When it cannot run here (an app older than the server's bytecode), it
+  /// waits for the server and shows the server's patch instead.
+  Future<List<dynamic>> _saved(
     String action,
     Map<String, Object?> event,
   ) async {
-    // A client action calls only server ones.
-    if (state.app?.clientActions.containsKey(action) ?? false) {
-      throw const ClientActionFailed('a client action called a client one');
+    final def = state.app?.actions[action];
+    if (def == null || !def.saved) {
+      throw const ClientActionFailed('called an action that is not saved');
     }
-    final delta = await _repository.act(_id, action, event);
-    final app = state.app;
-    if (app == null) return delta;
+    List<dynamic>? shown;
     try {
-      _emitData(applyPatch(app.data, delta));
-    } on Object {
-      // A patch this side cannot apply: the server's copy is the truth.
-      await load();
+      shown = await _run(def, event, call: _noCall);
+      _apply(shown);
+    } on ClientActionFailed {
+      shown = null;
     }
-    return delta;
+    final sent = _sending.then((_) => _repository.act(_id, action, event));
+    _sending = sent.then<void>((_) {}, onError: (_) {});
+
+    if (shown == null) {
+      final delta = await sent;
+      _apply(delta);
+      return delta;
+    }
+    final mine = shown;
+    unawaited(
+      sent.then(
+        (delta) async {
+          // The server read its own copy; if it got another answer, its
+          // copy is the truth.
+          if (jsonEncode(delta) != jsonEncode(mine)) await load();
+        },
+        onError: (Object error) async {
+          await load();
+          _emitError(error is DioException ? serverMessage(error) ?? '' : '');
+        },
+      ),
+    );
+    return mine;
+  }
+
+  Future<List<dynamic>> _run(
+    AppAction def,
+    Map<String, Object?> event, {
+    required ServerCall call,
+  }) {
+    final data = state.app?.data ?? const {};
+    return _runner.run(
+      evc: def.evc,
+      input: {for (final path in def.input) path: valueAt(data, path)},
+      event: event,
+      call: call,
+    );
+  }
+
+  /// What a saved action gets as `call`: it is the one being called.
+  static Future<List<dynamic>> _noCall(String _, Map<String, Object?> _) =>
+      Future.error(const ClientActionFailed('a saved action calls none'));
+
+  /// Shows [patch]; one this side cannot apply fails the action.
+  void _apply(List<dynamic> patch) {
+    final app = state.app;
+    if (app == null) return;
+    final Map<String, dynamic> next;
+    try {
+      next = applyPatch(app.data, patch);
+    } on Object {
+      throw const ClientActionFailed('bad patch');
+    }
+    _emitData(next);
   }
 
   void _emitError(String error) {
-    emit(AppRunState(app: state.app, error: error));
+    if (!isClosed) emit(AppRunState(app: state.app, error: error));
   }
 
   void _emitData(Map<String, dynamic> data) {
-    emit(AppRunState(app: state.app!.withData(data)));
+    if (!isClosed) emit(AppRunState(app: state.app!.withData(data)));
   }
 }

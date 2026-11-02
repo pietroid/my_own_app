@@ -91,6 +91,39 @@ Future<List> run(Map input, Map event, Function call) async {
     );
   });
 
+  test('a cast to a nullable type lets a missing value through', () async {
+    expect(
+      await _run('''
+Future<List> run(Map input, Map event, Function call) async {
+  final title = (event['title'] as String? ?? '').trim();
+  final n = event['n'] as int? ?? 0;
+  final items = event['items'] as List? ?? [];
+  final more = event['more'] as Map?;
+  return [title.isEmpty, n + 1, items.length, more == null];
+}
+'''),
+      [true, 1, 0, true],
+    );
+    expect(
+      await _run(
+        'Future<List> run(Map i, Map event, Function c) async {'
+        " return [(event['title'] as String? ?? '').trim()]; }",
+        event: {'title': ' Pão '},
+      ),
+      ['Pão'],
+    );
+  });
+
+  test('a cast to a type that is not nullable still refuses null', () async {
+    await expectLater(
+      _run(
+        'Future<List> run(Map i, Map event, Function c) async {'
+        " return [event['title'] as String]; }",
+      ),
+      throwsA(isA<ActionRunError>()),
+    );
+  });
+
   test('a throw fails the action', () async {
     await expectLater(
       _run(

@@ -167,6 +167,7 @@ Future<List> run(Map i, Map e, Function c) async {
       await run(bundle.actions.add_todo.code, {}, { title: ' Pão ' }),
     ).toEqual([
       { op: 'add', path: '/todos/-', value: { title: 'Pão', done: false } },
+      { op: 'replace', path: '/draft', value: '' },
     ]);
     expect(
       await run(
@@ -178,6 +179,5 @@ Future<List> run(Map i, Map e, Function c) async {
     expect(
       await run(bundle.actions.remove_todo.code, {}, { itemPath: '/todos/0' }),
     ).toEqual([{ op: 'remove', path: '/todos/0' }]);
-    await runner.compile(bundle.actions.add.code);
   });
 });

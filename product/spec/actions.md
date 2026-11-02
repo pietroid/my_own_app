@@ -1,9 +1,29 @@
 # Actions
 
 An app's actions are small Dart functions the model writes once, compiled
-into dart_eval bytecode, and run without the model from then on: on the
-server (`on: "server"`, the default, its patch kept) or on the device
-(`on: "client"`, its patch only changes the screen).
+into dart_eval bytecode, and run without the model from then on. **Every
+action runs on the device first**, so the screen changes the moment the
+person taps. A saved action (`on: "server"`, the default) is then run again
+by the server on its own copy, which keeps the patch; a client action
+(`on: "client"`) only changes the screen.
+
+## Local first (`AppRunCubit`)
+
+1. A tap on a saved action runs it on the device and shows its patch.
+2. The tap is queued; the queue sends one at a time, in order, so the
+   server reads the same data the device did.
+3. The server's patch equal to the one shown: nothing more. Different: the
+   server's copy is loaded. A refusal: the server's copy is loaded and its
+   words shown.
+4. An action the device cannot run (bytecode from a newer server) waits for
+   the server and shows its patch, as before.
+5. A client action's `call(name, event)` is step 1–3 for that saved action,
+   and resolves to the patch shown.
+
+What a person types (a `TextField`) lives only on the device, so a saved
+action reads it from the event (the button's `context`), never from
+`input`: on the server, `input` would read the saved, empty field. The
+prompt says so, and the example does it.
 
 ## The contract
 
@@ -16,8 +36,8 @@ Future<List> run(Map input, Map event, Function call) async { ... }
   `index` inside a template).
 - It answers a JSON Patch (RFC 6902) as a `List` of `Map`s.
 - Always `async`: dart_eval will not `await` a value that is not a `Future`.
-- `call(name, event)` (client actions only) runs a server action, whose
-  patch is kept and applied first, and resolves to that patch.
+- `call(name, event)`, in a client action, runs a saved action (above)
+  and resolves to its patch.
 - Values cross in and out as JSON strings: nothing but plain data.
 - The subset of Dart that works is listed in `BUILD_PROMPT`
   (`server/src/apps/apps.service.ts`); no imports, classes, mixins,
@@ -55,6 +75,7 @@ Future<List> run(Map input, Map event, Function call) async { ... }
 - Apps with actions that were never compiled (JavaScript, from before) are
   rebuilt from their prompt by `node dist/apps/rebuild.js`: one model call
   each; the old data is kept when the new data has the same top-level keys.
+  `--all` rebuilds every app from fresh data, for a changed `BUILD_PROMPT`.
 - Model JSON is read leniently in two lossless ways: an `actions` sent as a
   JSON-encoded string is decoded, and a Dart `\$` left unescaped in the
   JSON is read as the `\$` it is (`parseModelJson`).
@@ -64,5 +85,5 @@ Future<List> run(Map input, Map event, Function call) async { ... }
 - `ClientRunner` (`app/lib/apps/client_runner.dart`) runs `run.dart` on the
   main isolate, the same on web, iOS and Android. A failure of any kind is
   `ClientActionFailed`; the person sees the app's usual error.
-- `GET /api/apps/:id` sends `clientActions: { name: { input, evc } }`;
-  no source and no server action leaves the server.
+- `GET /api/apps/:id` sends `actions: { name: { on, input, evc } }`, every
+  action's bytecode; no source leaves the server.
