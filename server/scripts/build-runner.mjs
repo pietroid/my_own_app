@@ -2,7 +2,7 @@
 // executable ActionRunner starts, when any of its sources is newer than it.
 // Needs Dart on the PATH (Flutter's will do). The image builds its own.
 import { execFileSync } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +38,8 @@ const sources = Math.max(
 if (sources > built) {
   console.log('Building the action runner…');
   execFileSync('dart', ['pub', 'get'], { cwd: runner, stdio: 'inherit' });
+  // `dart compile exe` does not create the folder it writes into.
+  mkdirSync(dirname(out), { recursive: true });
   execFileSync('dart', ['compile', 'exe', 'bin/runner.dart', '-o', out], {
     cwd: runner,
     stdio: 'inherit',

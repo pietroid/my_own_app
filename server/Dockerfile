@@ -5,7 +5,9 @@ FROM --platform=$BUILDPLATFORM dart:3.12 AS action-runner
 ARG TARGETARCH
 WORKDIR /runner
 COPY --from=runner . .
-RUN dart pub get \
+# `dart compile exe` does not create the folder it writes into.
+RUN mkdir -p /out \
+ && dart pub get \
  && dart compile exe bin/runner.dart -o /out/action-runner \
       --target-os=linux --target-arch=$([ "$TARGETARCH" = amd64 ] && echo x64 || echo arm64)
 
