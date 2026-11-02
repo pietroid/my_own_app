@@ -17,4 +17,5 @@ export 'src/theme/app_typography.dart';
 export 'src/widgets/app_build_grid.dart';
 export 'src/widgets/app_button.dart';
 export 'src/widgets/app_empty_state.dart';
+export 'src/widgets/app_phone_frame.dart';
 export 'src/widgets/app_typing_indicator.dart';

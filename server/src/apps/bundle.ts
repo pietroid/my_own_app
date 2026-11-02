@@ -7,7 +7,10 @@
  *   values and no code.
  * - `data`: one JSON document, the app's whole state.
  * - `actions`: small JS functions, `function run(input, event)`, that are
- *   given only the paths they declare and answer with a JSON Patch.
+ *   given only the paths they declare and answer with a JSON Patch. A
+ *   server action (the default) runs here and its patch is kept; a client
+ *   action runs on the device, may `await call(name, event)` a server one,
+ *   and its own patch changes only what is on screen.
  */
 export interface Bundle {
   name: string;
@@ -17,6 +20,8 @@ export interface Bundle {
 }
 
 export interface ActionDef {
+  /** Where it runs: here, kept (the default), or on the device, not kept. */
+  on?: 'server' | 'client';
   /** The JSON Pointers the action reads; `run` gets them keyed by path. */
   input: string[];
   /** `function run(input, event) { return [ ...JSON Patch ] }` */
@@ -119,6 +124,13 @@ export function parseBundle(value: unknown): Bundle {
       !action.input.every((p) => typeof p === 'string' && POINTER.test(p))
     ) {
       fail(`${actionName}: input must be a list of JSON Pointers`);
+    }
+    if (
+      action.on !== undefined &&
+      action.on !== 'server' &&
+      action.on !== 'client'
+    ) {
+      fail(`${actionName}: on must be "server" or "client"`);
     }
     if (typeof action.code !== 'string' || !action.code.includes('run')) {
       fail(`${actionName}: code must define function run(input, event)`);

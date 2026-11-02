@@ -43,6 +43,13 @@ describe('parseBundle', () => {
     ],
     ['an unknown action', { ...todo, actions: {} }],
     [
+      'an action that runs nowhere',
+      {
+        ...todo,
+        actions: { add_todo: { ...todo.actions.add_todo, on: 'moon' } },
+      },
+    ],
+    [
       'a missing child',
       {
         ...todo,
@@ -85,5 +92,9 @@ describe('runAction', () => {
   it('checks that run exists', () => {
     expect(() => checkAction('const x = 1;')).toThrow(ActionFailedError);
     expect(() => checkAction(todo.actions.add_todo.code)).not.toThrow();
+    // A client action is async, and only compiled here.
+    expect(() =>
+      checkAction('async function run(input, event, call) { return []; }'),
+    ).not.toThrow();
   });
 });

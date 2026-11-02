@@ -12,12 +12,16 @@ import { generatedApp } from '../db/schema';
 import { Bundle, InvalidBundleError, parseBundle } from './bundle';
 import { ActionFailedError, checkAction, runAction } from './sandbox';
 
-/** An app as the app reads it: everything but the actions' code. */
+/**
+ * An app as the app reads it. Of the actions, only the client ones go out
+ * (the device runs them); a server action's code stays here.
+ */
 export interface AppSnapshot {
   id: string;
   name: string;
   ui: Bundle['ui'];
   data: Record<string, unknown>;
+  clientActions: Record<string, { input: string[]; code: string }>;
   rev: number;
 }
 
@@ -62,11 +66,20 @@ export class AppsService {
 
   async get(userId: string, id: string): Promise<AppSnapshot> {
     const row = await this._row(userId, id);
+    const clientActions: AppSnapshot['clientActions'] = {};
+    for (const [name, def] of Object.entries(
+      row.actions as Bundle['actions'],
+    )) {
+      if (def.on === 'client') {
+        clientActions[name] = { input: def.input, code: def.code };
+      }
+    }
     return {
       id: row.id,
       name: row.name,
       ui: row.ui as Bundle['ui'],
       data: row.data as Record<string, unknown>,
+      clientActions,
       rev: row.rev,
     };
   }
@@ -94,7 +107,10 @@ export class AppsService {
     const row = await this._row(userId, id);
     const actions = row.actions as Bundle['actions'];
     const def = Object.hasOwn(actions, action) ? actions[action] : undefined;
-    if (def === undefined) throw new ActionFailedError(`no action ${action}`);
+    // A client action is the device's to run; here it does not exist.
+    if (def === undefined || def.on === 'client') {
+      throw new ActionFailedError(`no server action ${action}`);
+    }
 
     const data = row.data as Record<string, unknown>;
     const input: Record<string, unknown> = {};
@@ -213,7 +229,11 @@ const BUILD_PROMPT = `You build small single-screen apps for a phone. Answer onl
 An app is three things:
 - data: one JSON object, the app's whole state, with its initial values.
 - ui: a flat list of components (a subset of A2UI). The one with id "root" is the screen. Components bind to data by JSON Pointer, written {"path": "/todos"}.
-- actions: an object, action name -> {"input": [JSON Pointers it reads], "code": "function run(input, event) { ... }"}. run gets input keyed by pointer (input["/todos"]) and the event, and returns a JSON Patch (RFC 6902) array to apply to data. It is plain JavaScript with no imports, no network and no Date.now; keep it short.
+- actions: an object, action name -> {"on": "server" or "client", "input": [JSON Pointers it reads], "code": "function run(input, event) { ... }"}. run gets input keyed by pointer (input["/todos"]) and the event, and returns a JSON Patch (RFC 6902) array to apply to data. It is plain JavaScript with no imports, no network and no Date.now; keep it short.
+
+Where an action runs:
+- "server" (the default): on the server; its patch is saved. Anything that must still be there tomorrow is a server action.
+- "client": on the person's device, instantly; its patch only changes what is on screen and is not saved. Use it for screen-only state (a filter, a tab, a counter that need not be kept) and to check or prepare input before a server action. A client run gets a third argument, call: "async function run(input, event, call) { const patch = await call('add_todo', {title}); ... }" runs a server action (its patch is saved and applied first) and resolves to that patch. A client action never calls another client action.
 
 Components (every one has "id" and "component"):
 - Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index".
@@ -233,14 +253,15 @@ Example, a to-do list:
   {"id": "title", "component": "Text", "text": "Minhas tarefas", "variant": "title"},
   {"id": "form", "component": "Row", "children": ["field", "add"]},
   {"id": "field", "component": "TextField", "label": "Nova tarefa", "value": {"path": "/draft"}},
-  {"id": "add", "component": "Button", "label": "Adicionar", "action": {"event": {"name": "add_todo", "context": {"title": {"path": "/draft"}}}}},
+  {"id": "add", "component": "Button", "label": "Adicionar", "action": {"event": {"name": "add"}}},
   {"id": "list", "component": "List", "children": {"componentId": "item", "path": "/todos"}},
   {"id": "item", "component": "Row", "children": ["check", "remove"]},
   {"id": "check", "component": "CheckBox", "label": {"path": "title"}, "value": {"path": "done"}, "action": {"event": {"name": "toggle_todo", "context": {"done": {"path": "done"}}}}},
   {"id": "remove", "component": "Button", "label": "Remover", "action": {"event": {"name": "remove_todo"}}}
  ],
  "actions": {
-  "add_todo": {"input": [], "code": "function run(input, event) { const title = (event.title || '').trim(); if (!title) return []; return [{op: 'add', path: '/todos/-', value: {title, done: false}}, {op: 'replace', path: '/draft', value: ''}]; }"},
-  "toggle_todo": {"input": [], "code": "function run(input, event) { return [{op: 'replace', path: event.itemPath + '/done', value: !event.done}]; }"},
-  "remove_todo": {"input": [], "code": "function run(input, event) { return [{op: 'remove', path: event.itemPath}]; }"}
+  "add": {"on": "client", "input": ["/draft"], "code": "async function run(input, event, call) { const title = (input['/draft'] || '').trim(); if (!title) return []; await call('add_todo', {title}); return [{op: 'replace', path: '/draft', value: ''}]; }"},
+  "add_todo": {"on": "server", "input": [], "code": "function run(input, event) { const title = (event.title || '').trim(); if (!title) return []; return [{op: 'add', path: '/todos/-', value: {title, done: false}}]; }"},
+  "toggle_todo": {"on": "server", "input": [], "code": "function run(input, event) { return [{op: 'replace', path: event.itemPath + '/done', value: !event.done}]; }"},
+  "remove_todo": {"on": "server", "input": [], "code": "function run(input, event) { return [{op: 'remove', path: event.itemPath}]; }"}
  }}`;

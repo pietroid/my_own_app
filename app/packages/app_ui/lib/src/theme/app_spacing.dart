@@ -64,4 +64,8 @@ abstract final class AppSpacing {
 
   /// The widest a content column ever gets, so text stays readable on web.
   static const maxContentWidth = 560.0;
+
+  /// From this width up, a built app runs inside a drawn phone
+  /// (`AppPhoneFrame`) instead of filling the window.
+  static const phoneFrameBreakpoint = 720.0;
 }

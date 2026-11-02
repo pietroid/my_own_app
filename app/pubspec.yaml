@@ -27,6 +27,7 @@ dependencies:
   intl: ^0.20.2
   l10n:
     path: packages/l10n
+  web: ^1.1.1
 
 dev_dependencies:
   bloc_lint: ^0.4.1

@@ -117,7 +117,11 @@ bundle (`generated_app`): `ui`, a flat list of components in our own subset
 of A2UI (Column, Row, List, Text, TextField, CheckBox, Button; the one with
 id `root` is the screen), bound to `data` by JSON Pointer; `data`, one JSON
 document; and `actions`, `function run(input, event)` in JS, given only the
-paths it declares and answering with a JSON Patch.
+paths it declares and answering with a JSON Patch. An action runs `on`
+`"server"` (the default: its patch is kept) or `"client"` (on the device,
+instantly; its patch only changes the screen and is not kept). A client
+action may `await call(name, event)` a server action: the app posts it to
+the API, applies the kept patch, and hands it back.
 
 - `POST /api/apps { prompt }` is one forced `create_app` tool call (and one
   retry with the error), checked by `parseBundle`. The prompt is
@@ -125,7 +129,18 @@ paths it declares and answering with a JSON Patch.
 - `POST /api/apps/:id/actions/:name { event }` runs the action in
   isolated-vm (32 MB, 50 ms), applies the patch under a `rev` check and
   answers it as an AG-UI `STATE_DELTA`; the app applies the same patch.
-  isolated-vm needs `node --no-node-snapshot` (in the scripts and the image).
+  It refuses a client action. isolated-vm needs `node --no-node-snapshot`
+  (in the scripts and the image).
+- `GET /api/apps/:id` sends the code of the client actions only
+  (`clientActions`); a server action's code never leaves the server.
+- On the web a client action runs in a Worker of its own
+  (`client_runner_web.dart`): started from a `data:` URL (opaque origin, so
+  no cookies), with the network APIs deleted before the code runs, 10 s at
+  most. On iOS and Android client actions fail for now (`client_runner_stub.dart`);
+  `flutter test --platform chrome test/apps/client_runner_web_test.dart`
+  tests the Worker.
+- On a window at least `AppSpacing.phoneFrameBreakpoint` wide, the app runs
+  inside `AppPhoneFrame`.
 - The app draws it with `AppRenderer` (`app/lib/apps/`). A component it
   does not know draws nothing; a new one goes in both `COMPONENTS` and the
   renderer, and in `BUILD_PROMPT`.

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:my_own_app/apps/apps_repository.dart';
+import 'package:my_own_app/apps/client_runner.dart';
 import 'package:my_own_app/apps/json_patch.dart';
 
 /// {@template apps_state}
@@ -95,16 +96,23 @@ class AppRunState extends Equatable {
 }
 
 /// {@template app_run_cubit}
-/// Runs one app: a tap goes to the server, which runs the app's own action
-/// and answers with a JSON Patch, applied here to the same data.
+/// Runs one app. A server action goes to the server, which runs it and
+/// answers with a JSON Patch, applied here to the same data. A client action
+/// runs on the device ([ClientRunner]); the server actions it calls are
+/// applied as they answer, then its own patch, which is not kept.
 /// {@endtemplate}
 class AppRunCubit extends Cubit<AppRunState> {
   /// {@macro app_run_cubit}
-  AppRunCubit({required this._repository, required this._id})
-    : super(const AppRunState());
+  AppRunCubit({
+    required this._repository,
+    required this._id,
+    ClientRunner? runner,
+  }) : _runner = runner ?? ClientRunner(),
+       super(const AppRunState());
 
   final AppsRepository _repository;
   final String _id;
+  final ClientRunner _runner;
 
   /// Loads the app as it is on the server.
   Future<void> load() async {
@@ -129,33 +137,62 @@ class AppRunCubit extends Cubit<AppRunState> {
 
   /// Runs [action] with [event] and applies what it changed.
   Future<void> act(String action, Map<String, Object?> event) async {
-    if (state.app == null) return;
+    final app = state.app;
+    if (app == null) return;
+    final client = app.clientActions[action];
     try {
-      final delta = await _repository.act(_id, action, event);
-      final app = state.app;
-      if (app == null) return;
+      if (client == null) {
+        await _server(action, event);
+        return;
+      }
+      final patch = await _runner.run(
+        code: client.code,
+        input: {
+          for (final path in client.input) path: valueAt(app.data, path),
+        },
+        event: event,
+        call: _server,
+      );
+      final now = state.app;
+      if (now == null) return;
       try {
-        _emitData(applyPatch(app.data, delta));
+        _emitData(applyPatch(now.data, patch));
       } on Object {
-        // A patch this side cannot apply: the server's copy is the truth.
-        await load();
+        throw const ClientActionFailed('bad patch');
       }
     } on DioException catch (error) {
-      emit(
-        AppRunState(
-          app: state.app,
-          error: serverMessage(error) ?? '',
-        ),
-      );
+      _emitError(serverMessage(error) ?? '');
+    } on ClientActionFailed {
+      _emitError('');
     }
   }
 
+  /// One server action: the server keeps its patch, and so does this side.
+  Future<List<dynamic>> _server(
+    String action,
+    Map<String, Object?> event,
+  ) async {
+    // A client action calls only server ones.
+    if (state.app?.clientActions.containsKey(action) ?? false) {
+      throw const ClientActionFailed('a client action called a client one');
+    }
+    final delta = await _repository.act(_id, action, event);
+    final app = state.app;
+    if (app == null) return delta;
+    try {
+      _emitData(applyPatch(app.data, delta));
+    } on Object {
+      // A patch this side cannot apply: the server's copy is the truth.
+      await load();
+    }
+    return delta;
+  }
+
+  void _emitError(String error) {
+    emit(AppRunState(app: state.app, error: error));
+  }
+
   void _emitData(Map<String, dynamic> data) {
-    final app = state.app!;
-    emit(
-      AppRunState(
-        app: AppSnapshot(id: app.id, name: app.name, ui: app.ui, data: data),
-      ),
-    );
+    emit(AppRunState(app: state.app!.withData(data)));
   }
 }

@@ -48,4 +48,7 @@ abstract final class AppColors {
 
   /// Something went wrong.
   static const negative = Color(0xFFF87171);
+
+  /// The glass of a drawn phone where nothing lights it: the island.
+  static const device = Color(0xFF000000);
 }

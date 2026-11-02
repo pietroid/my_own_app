@@ -18,8 +18,26 @@ class AppSummary extends Equatable {
   List<Object?> get props => [id, name];
 }
 
+/// {@template client_action}
+/// An action the device runs itself: what it reads, and its code.
+/// {@endtemplate}
+class ClientAction extends Equatable {
+  /// {@macro client_action}
+  const ClientAction({required this.input, required this.code});
+
+  /// The JSON Pointers it reads.
+  final List<String> input;
+
+  /// `async function run(input, event, call) { ... }`
+  final String code;
+
+  @override
+  List<Object?> get props => [input, code];
+}
+
 /// {@template app_snapshot}
-/// A built app as the server sends it: its screen and its data.
+/// A built app as the server sends it: its screen, its data, and the
+/// actions the device runs itself (a server action's code stays there).
 /// {@endtemplate}
 class AppSnapshot extends Equatable {
   /// {@macro app_snapshot}
@@ -28,6 +46,7 @@ class AppSnapshot extends Equatable {
     required this.name,
     required this.ui,
     required this.data,
+    this.clientActions = const {},
   });
 
   /// From `GET /apps/:id`.
@@ -39,6 +58,19 @@ class AppSnapshot extends Equatable {
         component as Map<String, dynamic>,
     ],
     data: json['data'] as Map<String, dynamic>,
+    clientActions: {
+      for (final MapEntry(:key, :value)
+          in (json['clientActions'] as Map<String, dynamic>? ?? const {})
+              .entries)
+        key: ClientAction(
+          input: [
+            for (final path
+                in (value as Map<String, dynamic>)['input'] as List<dynamic>)
+              '$path',
+          ],
+          code: value['code'] as String,
+        ),
+    },
   );
 
   /// The app's id.
@@ -53,8 +85,20 @@ class AppSnapshot extends Equatable {
   /// The app's whole state.
   final Map<String, dynamic> data;
 
+  /// The actions the device runs, by name.
+  final Map<String, ClientAction> clientActions;
+
+  /// This app with other [data].
+  AppSnapshot withData(Map<String, dynamic> data) => AppSnapshot(
+    id: id,
+    name: name,
+    ui: ui,
+    data: data,
+    clientActions: clientActions,
+  );
+
   @override
-  List<Object?> get props => [id, name, ui, data];
+  List<Object?> get props => [id, name, ui, data, clientActions];
 }
 
 /// {@template apps_repository}
