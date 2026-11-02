@@ -2,6 +2,8 @@ name: Review page
 
 # Publishes .tool/review.html on GitHub Pages: the RFC of a PR as a page you
 # comment on from the phone, each comment a PR line comment the queue reads.
+# Each RFC's presentation, product/research/<folder>/deck.html, is published
+# beside it at research/<folder>/ (a queue branch adds its own to main's).
 # Needs Pages set to "GitHub Actions" once (.tool/queue setup does it, and
 # dispatches the first deploy). Every push to main deploys, so a missed or
 # failed deploy heals on the next merge. A queue branch deploys only when its
@@ -58,7 +60,7 @@ jobs:
           if [ -z "${BEFORE//0/}" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             BEFORE=$(git merge-base origin/main "$GITHUB_SHA")
           fi
-          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qxE '\.tool/review\.html|\.github/workflows/review-page\.yml'; then
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qxE '\.tool/review\.html|\.github/workflows/review-page\.yml|product/research/[^/]+/deck\.html'; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
@@ -75,6 +77,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: mkdir _site && cp .tool/review.html _site/review.html && cp .tool/review.html _site/index.html
+      - name: Add each RFC's presentation
+        run: |
+          for deck in product/research/*/deck.html; do
+            [ -f "$deck" ] || continue
+            folder=$(basename "$(dirname "$deck")")
+            mkdir -p "_site/research/$folder"
+            cp "$deck" "_site/research/$folder/index.html"
+            echo "::notice::research/$folder/"
+          done
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

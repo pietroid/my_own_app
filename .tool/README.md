@@ -16,6 +16,7 @@ output are what make a session cheap.
 | `doc` | List, open and comment on the Markdown under `product/`; check an RFC's slides and print them |
 | `queue` | GitHub issues worked by Claude Code on this Mac, gate by gate |
 | `review.html` | The PR's README as a page on GitHub Pages, commented on by selecting text; drawn as a deck |
+| `deck.html` | The shell of an RFC's presentation (`/research`): 1920×1080 slides, served on Pages at `research/<folder>/` |
 
 ## `check`: what CI runs, on what changed
 

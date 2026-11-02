@@ -1,6 +1,6 @@
 ---
 name: research
-description: /research - research a problem in My Own App and present it as an RFC that reads like a short talk - one Markdown deck in its own product/research/<date>-<slug>/ folder, each heading a slide that states one point over one diagram, table, picture or piece of code, in story order (the finding, today, examples, the change, trade-offs, impact, decisions, where to go deeper) - with the data, code and reports behind it. Trace the symptoms to the code, read the literature, measure the impact, build the visuals and check them with .tool/doc shape and shot, answer the person's notes (GitHub line comments or .tool/doc), then verify the weakest claims with a deep-research pass. When the RFC is approved it lands on main and its implementation is opened as a /create issue the queue builds into a PR. Use when asked to "research", "investigate how to improve", write an RFC, a proposal, a thesis, or to compare approaches before building.
+description: /research - research a problem in My Own App and present it as an RFC that reads like a short talk - one Markdown deck in its own product/research/<date>-<slug>/ folder, each heading a slide that states one point over one diagram, table, picture or piece of code, in story order (the finding, today, examples, the change, trade-offs, impact, decisions, where to go deeper) - with the data, code and reports behind it, and a deck.html presentation of the same story cut to the goal, published on GitHub Pages. Trace the symptoms to the code, read the literature, measure the impact, build the visuals and check them with .tool/doc shape and shot, answer the person's notes (GitHub line comments or .tool/doc), then verify the weakest claims with a deep-research pass. When the RFC is approved it lands on main and its implementation is opened as a /create issue the queue builds into a PR. Use when asked to "research", "investigate how to improve", write an RFC, a proposal, a thesis, or to compare approaches before building.
 ---
 
 # Research: the digging is long, the RFC is a short talk
@@ -23,7 +23,8 @@ issue): the queue's instructions replace every "ask" here.
 
 ```
 product/research/YYYY-MM-DD-<slug>/
-  README.md          the RFC (a deck)
+  README.md          the RFC (a deck), what the person comments on
+  deck.html          the presentation: the same story cut to the goal, served on Pages
   img/               every picture it shows: charts, screenshots, rendered figures
   data/              what was measured (CSV, JSON, log extracts)
   code/              the scripts that produced data/ and img/, runnable again
@@ -128,6 +129,49 @@ continuous block (Mayer's segmenting principle). See the worked example.
 Fix every ✗ (or say why it stays), Read two or three of the PNGs, and
 open the RFC for the person (`.tool/doc open <slug>`, in the background).
 
+### The presentation: deck.html
+
+The README is the record the person comments on; `deck.html` is what they
+present and pass around. It tells the same story, **cut to the goal**: what
+to do, how big it is, and what to decide. It holds less than the README,
+never more. Worked example: `product/research/2026-11-01-apps-as-data/deck.html`.
+
+- **Start from the shell.** Copy `.tool/deck.html` to the topic folder as
+  `deck.html`, set its `<title>` (and fonts, if you change them), and put
+  one `<section>` per slide where the slides comment is. Arrows, swipe and
+  `#N` move between slides; N shows the notes; printing gives a PDF.
+- **8–12 slides, in this order.** The cover is the thesis as a sentence.
+  Slide 2 is the answer: what to do, its size, and what is new. Then how it
+  works (an example each), the evidence, the impact (today against after),
+  Decisions (recommended first), and Go deeper. *Today* and *Decided
+  unattended* get a slide only when they change a decision; otherwise they
+  go in the speaker notes.
+- **The slide is a 1920×1080 `<section>` with inline styles only.** Use
+  `padding:128px 128px 160px` and flex or grid, a sentence headline of
+  ≤ 12 words, and one visual: a table, a row of cards, big numbers, bars
+  drawn as `<div>`s, or code of ≤ 14 lines. Text is never under 24px.
+  Nothing goes past y 920 except one pinned footer line, which names the
+  source. Speaker notes are plain text in an `<aside>`, the section's last
+  child.
+- **One look across the deck.** Use one palette (a light tone, a dark tone,
+  one accent and one warning colour, with the dark tone for the cover and
+  the slide the reader must not miss), one type scale (120/64/40/30/24), and
+  two typefaces.
+- **Only true numbers.** Every figure comes from `data/` and names it in
+  the footer. Anything not measured says so on the slide.
+- **Check it.** Screenshot each slide and Read every PNG once. Fix any text
+  past the footer and any word broken across lines.
+
+  ```
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --virtual-time-budget=4000 --window-size=1920,1080 \
+    --screenshot="$TMPDIR/slide-3.png" "file://$PWD/product/research/<folder>/deck.html#3"
+  ```
+
+- **Published by Pages.** `review-page.yml` serves it at
+  `https://<owner's Pages>/<repo>/research/<folder>/` on every push to
+  main, and on a queue branch whose push changes it.
+
 ## 4. Verify (deep research)
 
 When the person agrees, or the RFC rests on snippets, run
@@ -176,7 +220,7 @@ in each.
 
 ## Delivering
 
-End each phase with: the RFC path, its first slide's thesis, the ideas it
+End each phase with: the RFC path, the presentation's Pages link, its first slide's thesis, the ideas it
 added to the ledger (a line each), anything skipped or unverified, and
 "reply **approve** to merge it and queue its build". Don't commit unless
 asked.

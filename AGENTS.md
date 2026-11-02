@@ -61,12 +61,14 @@ product/
   spec/                 feature specs kept out of this file
   delivery/             one folder per delivered feature: prompt, design, notes
   improvements/         one folder per /improve run: what changed, evidence, references
-  research/             one folder per topic: the RFC (README.md, a deck), img/, data/, code/;
+  research/             one folder per topic: the RFC (README.md, a deck), its presentation
+                        (deck.html, on Pages at research/<folder>/), img/, data/, code/;
                         concepts.md, the ideas every RFC taught
 .tool/                  internal tools: check (CI on what changed), preview (prints),
                         cost (session tokens), doc (open/annotate Markdown, RFC slides),
                         queue (GitHub issues worked unattended, gate by gate),
-                        review.html (a PR's README on Pages, commented on by selection)
+                        review.html (a PR's README on Pages, commented on by selection),
+                        deck.html (the shell of an RFC's presentation)
 ```
 
 ## Auth

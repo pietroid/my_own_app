@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The shell of an RFC's presentation (/research, step 5). Copy it to
+  product/research/<folder>/deck.html, set the title and the fonts, and put
+  the slides where the slides comment is: one <section> per slide, drawn on a
+  1920×1080 canvas with inline styles only, speaker notes in a last <aside>.
+  Arrows, space, swipe or a click move; #3 opens slide 3; N shows the notes;
+  printing gives one page per slide. Pages serves it at research/<folder>/.
+-->
+<title>Apps as Data</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root { --stage: #0e1116; --chrome: #8a93a3; }
+  html, body { margin: 0; height: 100%; background: var(--stage); overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #deck { position: relative; width: 1920px; height: 1080px; flex: none; }
+  #deck > section { position: absolute; inset: 0; box-sizing: border-box; overflow: hidden; }
+  #deck > section:not(.on) { display: none !important; }
+  #deck * { margin: 0; box-sizing: border-box; }
+  #deck aside { display: none; }
+  #deck ul, #deck ol { padding-left: 1.2em; }
+  #deck table { border-collapse: collapse; width: 100%; }
+  #deck th, #deck td { text-align: left; vertical-align: top; padding: .35em .6em;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+  #deck th { font-weight: 600; }
+  #deck a { color: inherit; text-decoration: underline; text-underline-offset: .15em; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 8px; text-align: center;
+    font: 13px/1.4 system-ui, sans-serif; color: var(--chrome); pointer-events: none; }
+  #turn { display: none; }
+  @media (orientation: portrait) and (max-width: 700px) { #turn { display: inline; } }
+  #notes { position: fixed; left: 16px; right: 16px; bottom: 36px; max-width: 900px; margin: 0 auto;
+    padding: 16px 20px; background: #1a1f27; color: #e6e8ef; border-radius: 10px;
+    font: 16px/1.5 system-ui, sans-serif; display: none; }
+  #notes.on { display: block; }
+  @media print {
+    @page { size: 1920px 1080px; margin: 0; }
+    html, body { height: auto; overflow: visible; background: none; }
+    #stage { position: static; display: block; }
+    #deck { transform: none !important; width: auto; height: auto; }
+    #deck > section { position: relative; width: 1920px; height: 1080px; break-after: page; }
+    #deck > section:not(.on) { display: revert !important; }
+    #bar, #notes { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div id="deck">
+<section id="cover" style="background:#14181F;color:#F6F4EF;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;justify-content:center;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:30px;color:#4FD1C0">RFC · apps-as-data · v2</p>
+<h1 style="font-size:120px;font-weight:700;line-height:1.05;width:1500px">An app is three stored files</h1>
+<p style="font-size:40px;line-height:1.4;color:#C9CFD8;width:1400px">A screen in A2UI, its data as JSON, its actions as small JS. The agent builds the app once. AG-UI streams every change to the app as a JSON Patch.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#8A93A3">Revises my_own_app #2 · 2026-11-02</p>
+<aside>This revises the apps-as-data RFC from my_own_app pull request 2. It is shorter, and it adds AG-UI as the wire between the server and the app.</aside>
+</section>
+<section id="answer" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">The agent builds an app once; then the app runs without it</h2>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFDF8;padding:40px;border:1px solid #E2DED4;border-radius:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#17695F">01 · STORE</p>
+<h3 style="font-size:40px;font-weight:600">A stored bundle</h3>
+<p style="font-size:30px;line-height:1.4;color:#4A5260">ui, data and actions, versioned. Opening the app regenerates nothing.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFDF8;padding:40px;border:1px solid #E2DED4;border-radius:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#17695F">02 · RUN</p>
+<h3 style="font-size:40px;font-weight:600">A tap runs code</h3>
+<p style="font-size:30px;line-height:1.4;color:#4A5260">An action runs on the server in isolated-vm. 0 tokens, about 0.3 ms.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#14181F;padding:40px;border:1px solid #14181F;border-radius:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#4FD1C0">03 · NEW · SYNC</p>
+<h3 style="font-size:40px;font-weight:600;color:#F6F4EF">One patch, end to end</h3>
+<p style="font-size:30px;line-height:1.4;color:#C9CFD8">An action returns a JSON Patch. The server applies it to data and sends it as an AG-UI STATE_DELTA.</p>
+</div>
+</div>
+<p style="font-size:30px;line-height:1.4;color:#4A5260">The first build is tiers 1 and 2, about <b style="color:#1B1F27">40%</b> of 42 common app types. All four tiers reach <b style="color:#1B1F27">79%</b>, an estimate.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">The answer</p>
+<aside>The answer to the issue is yes, with corrections. The new part is the third card. The action's output, the storage update and the wire message are all one JSON Patch.</aside>
+</section>
+<section id="bundle" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">A bundle is a screen, its data and its actions</h2>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600;color:#17695F">ui · A2UI v0.9</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.4;background:#14181F;color:#E6E8EF;padding:32px;border-radius:12px">{ "id": "spent",<br>&#160;&#160;"component": "Text",<br>&#160;&#160;"text": { "path":<br>&#160;&#160;&#160;&#160;"/trip/spentTotal" } }<br>{ "id": "add",<br>&#160;&#160;"component": "Button",<br>&#160;&#160;"action": { "event": {<br>&#160;&#160;&#160;&#160;"name": "add_expense"<br>} } }</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600;color:#17695F">data · JSON</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.4;background:#14181F;color:#E6E8EF;padding:32px;border-radius:12px">{ "trip": {<br>&#160;&#160;"title": "Lisboa",<br>&#160;&#160;"budget": 8000,<br>&#160;&#160;"expenses": [],<br>&#160;&#160;"spentTotal": 0<br>} }</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600;color:#17695F">actions/add_expense.js</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.4;background:#14181F;color:#E6E8EF;padding:32px;border-radius:12px">export const input =<br>&#160;&#160;['/trip/spentTotal'];<br>export function run(<br>&#160;&#160;{ spentTotal }, e) {<br>&#160;&#160;return [<br>&#160;&#160;&#160;{ op: 'add', path:<br>&#160;&#160;&#160;&#160;'/trip/expenses/-',<br>&#160;&#160;&#160;&#160;value: e },<br>&#160;&#160;&#160;{ op: 'replace', path:<br>&#160;&#160;&#160;&#160;'/trip/spentTotal',<br>&#160;&#160;&#160;&#160;value: spentTotal<br>&#160;&#160;&#160;&#160;&#160;&#160;+ e.amount }];<br>}</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">The screen binds by path and names actions. It holds no values and no code.</p>
+<aside>Example: organize my trip to Lisbon. One build turn writes these three files. The action declares the paths it reads and returns a patch, never a whole new state.</aside>
+</section>
+<section id="tap" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">A tap runs code, not the model</h2>
+<div style="display:flex;align-items:stretch;gap:16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFDF8;padding:32px;border:1px solid #E2DED4;border-radius:16px">
+<h3 style="font-size:36px;font-weight:600">Tap</h3>
+<p style="font-size:26px;line-height:1.4;color:#4A5260">The A2UI button sends its event, with the values of its context paths</p>
+</div>
+<p style="align-self:center;font-size:48px;color:#8A93A3">→</p>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFDF8;padding:32px;border:1px solid #E2DED4;border-radius:16px">
+<h3 style="font-size:36px;font-weight:600">Run</h3>
+<p style="font-size:26px;line-height:1.4;color:#4A5260">The action runs in isolated-vm with 32 MB and 50 ms, given only its declared paths</p>
+</div>
+<p style="align-self:center;font-size:48px;color:#8A93A3">→</p>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFDF8;padding:32px;border:1px solid #E2DED4;border-radius:16px">
+<h3 style="font-size:36px;font-weight:600">Patch</h3>
+<p style="font-size:26px;line-height:1.4;color:#4A5260">JSON Patch out, applied to data in one transaction, with a rev check</p>
+</div>
+<p style="align-self:center;font-size:48px;color:#8A93A3">→</p>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#14181F;padding:32px;border:1px solid #14181F;border-radius:16px">
+<h3 style="font-size:36px;font-weight:600;color:#4FD1C0">Delta</h3>
+<p style="font-size:26px;line-height:1.4;color:#C9CFD8">The same operations go to the app as an AG-UI STATE_DELTA</p>
+</div>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #17695F;padding:24px 0 0 0">
+<p style="font-size:72px;font-weight:700;color:#17695F">0</p>
+<p style="font-size:26px;color:#4A5260">tokens per tap (1 model call if an action declares ai())</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #17695F;padding:24px 0 0 0">
+<p style="font-size:72px;font-weight:700;color:#17695F">0.3 ms</p>
+<p style="font-size:26px;color:#4A5260">in the sandbox, given only the declared paths</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #B4561A;padding:24px 0 0 0">
+<p style="font-size:72px;font-weight:700;color:#B4561A">58 ms</p>
+<p style="font-size:26px;color:#4A5260">given the whole state, at 50,000 expenses (4.4 MB)</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">Bench: my_own_app #2, data/sandbox-bench.csv, run on a Mac, not the Pi</p>
+<aside>Each tap runs a small stored function. Passing the whole state grows with every row, so each action declares the paths it reads, as Shopify Functions do. The network round trip costs more than the sandbox.</aside>
+</section>
+<section id="agui" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:32px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">AG-UI sends a snapshot when the app opens, then a delta per change</h2>
+<table style="font-size:24px;color:#1B1F27">
+<tr><th style="width:26%">Moment</th><th style="width:36%">AG-UI event</th><th style="width:38%">Payload</th></tr>
+<tr><td>Open the app</td><td>STATE_SNAPSHOT</td><td>the whole data document</td></tr>
+<tr><td>Tap an action</td><td>STATE_DELTA</td><td>the action’s JSON Patch, unchanged</td></tr>
+<tr><td>Ask for a change</td><td>TEXT_MESSAGE_* · TOOL_CALL_*</td><td>the agent’s reply and its edit_app call, streamed</td></tr>
+<tr><td>Show the screen</td><td>CUSTOM “a2ui”</td><td>A2UI updateComponents (our choice)</td></tr>
+<tr><td>Every tap or turn</td><td>RUN_STARTED · RUN_FINISHED</td><td>one run; RUN_ERROR on a failed action</td></tr>
+</table>
+<div style="display:flex;gap:32px;align-items:stretch">
+<p style="flex:1;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.4;background:#14181F;color:#E6E8EF;padding:28px;border-radius:12px">{ "type": "STATE_DELTA",<br>&#160;&#160;"delta": [{ "op": "add",<br>&#160;&#160;&#160;&#160;"path": "/trip/expenses/-",<br>&#160;&#160;&#160;&#160;"value": { "amount": 40 } }] }</p>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;border-left:4px solid #17695F;padding:8px 0 8px 32px">
+<p style="font-size:28px;line-height:1.4;font-style:italic">“STATE_DELTA delivers incremental updates to the state using JSON Patch format (RFC 6902).”</p>
+<p style="font-size:24px;line-height:1.4;color:#4A5260">For us, the action’s output is already in the wire format, so we need no diffing and no second encoder.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">AG-UI docs, State Management: docs.ag-ui.com/concepts/state</p>
+<aside>AG-UI is the event protocol between an agent and a front end. Its state model is a snapshot followed by JSON Patch deltas, which is exactly what our actions produce. Carrying A2UI in a CUSTOM event is our choice. Some integrations carry it inside a tool call instead.</aside>
+</section>
+<section id="layers" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">A2UI draws the screen; AG-UI delivers it</h2>
+<table style="font-size:28px;color:#1B1F27">
+<tr><th style="width:24%"></th><th style="width:38%">A2UI v0.9: the payload</th><th style="width:38%">AG-UI: the transport</th></tr>
+<tr><td>Describes</td><td>components bound to data paths</td><td>events between the agent and the app</td></tr>
+<tr><td>Data updates</td><td>updateDataModel: a value at a path</td><td>STATE_DELTA: any JSON Patch (add, remove, move)</td></tr>
+<tr><td>Actions</td><td>named events, registered in advance</td><td>none; we map each action to a run</td></tr>
+<tr><td>Streaming</td><td>none</td><td>text, tool calls and steps, as they happen</td></tr>
+<tr><td>We use it for</td><td>the screen</td><td>the wire and the data</td></tr>
+</table>
+<div style="display:flex;flex-direction:column;gap:12px;background:#14181F;padding:40px;border-radius:16px">
+<p style="font-size:32px;line-height:1.4;color:#F6F4EF">Keep A2UI as the screen format. Send data as AG-UI state instead of A2UI’s updateDataModel.</p>
+<p style="font-size:26px;line-height:1.4;color:#C9CFD8">Adding a row is then one <span style="color:#4FD1C0">add</span> operation, not a rewrite of the whole array. The person also watches the build turn stream.</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">a2ui.org/specification/v0.9-a2ui · docs.ag-ui.com</p>
+<aside>The two protocols work at different layers, so the choice is not one or the other. A2UI stays the screen format, behind one encoder because v1.0 renames bindings. AG-UI replaces our hand-made reply format.</aside>
+</section>
+<section id="sandbox" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">The agent writes the actions, so they run in isolated-vm, never eval</h2>
+<table style="font-size:28px;color:#1B1F27">
+<tr><th style="width:24%">Runner</th><th style="width:36%">Isolation</th><th style="width:16%">1 MB state</th><th style="width:24%">Verdict</th></tr>
+<tr><td>eval · node:vm</td><td>none: “not a security mechanism”</td><td>14 ms</td><td>Rejected</td></tr>
+<tr style="background:#E3F0EC"><td><b>isolated-vm</b></td><td>its own V8 isolate, memory cap, timeout</td><td>12 ms</td><td><b>Chosen</b>, run in a worker</td></tr>
+<tr><td>QuickJS (WASM)</td><td>an interpreter, nothing exposed</td><td>62 ms</td><td>Fallback</td></tr>
+<tr><td>child process</td><td>an OS process</td><td>+ spawn</td><td>Too heavy per tap</td></tr>
+</table>
+<p style="font-size:30px;line-height:1.4;color:#4A5260">The person’s words reach the agent, so action code is untrusted. isolated-vm has a prebuilt arm64 binary for the Pi, but the project is in maintenance mode. If it stops being maintained, actions move to QuickJS without changing the contract (declared paths in, a patch out).</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">nodejs.org/api/vm.html · github.com/laverdet/isolated-vm · my_own_app #2 bench</p>
+<aside>Node’s own docs say vm is not a security mechanism. isolated-vm’s README advises running it in a separate process, and its memory limit is approximate, so we run it in a worker.</aside>
+</section>
+<section id="coverage" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">Four tiers of the catalog reach 79% of 42 app types</h2>
+<div style="display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;align-items:center;gap:32px">
+<div style="width:560px;display:flex;flex-direction:column;gap:4px"><p style="font-size:30px;font-weight:600">Tier 1 · lists, forms, actions</p><p style="font-size:24px;color:#4A5260">to-do, notes, groceries</p></div>
+<div style="width:167px;height:56px;background:#A9CFC7;border-radius:6px"></div>
+<p style="font-size:32px;font-weight:600">17%</p>
+</div>
+<div style="display:flex;align-items:center;gap:32px">
+<div style="width:560px;display:flex;flex-direction:column;gap:4px"><p style="font-size:30px;font-weight:600">Tier 2 · + map, chart, photo</p><p style="font-size:24px;color:#4A5260">trip planner, expenses, journals</p></div>
+<div style="width:392px;height:56px;background:#17695F;border-radius:6px"></div>
+<p style="font-size:32px;font-weight:600;color:#17695F">40% · first build</p>
+</div>
+<div style="display:flex;align-items:center;gap:32px">
+<div style="width:560px;display:flex;flex-direction:column;gap:4px"><p style="font-size:30px;font-weight:600">Tier 3 · + schedule, fetch, ai()</p><p style="font-size:24px;color:#4A5260">reminders, trackers, API readers</p></div>
+<div style="width:676px;height:56px;background:#A9CFC7;border-radius:6px"></div>
+<p style="font-size:32px;font-weight:600">69%</p>
+</div>
+<div style="display:flex;align-items:center;gap:32px">
+<div style="width:560px;display:flex;flex-direction:column;gap:4px"><p style="font-size:30px;font-weight:600">Tier 4 · + sharing</p><p style="font-size:24px;color:#4A5260">family chores, shared lists, booking</p></div>
+<div style="width:774px;height:56px;background:#A9CFC7;border-radius:6px"></div>
+<p style="font-size:32px;font-weight:600">79%</p>
+</div>
+</div>
+<p style="font-size:28px;line-height:1.4;color:#4A5260">Out of reach (21%): payments, real-time chat and feeds, GPS, heavy media, games.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">An estimate: 42 app types coded by hand, not a store census (my_own_app #2, data/archetypes.csv)</p>
+<aside>The tiers are cumulative. Tier 2 is the first build because the issue’s own example, the trip planner, needs a map. The largest cost is the catalog: app_ui has 3 widgets today and needs about 25.</aside>
+</section>
+<section id="impact" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">Today and with bundles</h2>
+<table style="font-size:26px;color:#1B1F27">
+<tr><th style="width:34%"></th><th style="width:22%">Today</th><th style="width:44%">With bundles</th></tr>
+<tr><td>App types it can build</td><td>0 of 42</td><td>40% first, 79% at tier 4 (estimate)</td></tr>
+<tr><td>Model calls per tap</td><td>none</td><td>0 (1 if the action declares ai())</td></tr>
+<tr><td>Model calls per change</td><td>none</td><td>1 build turn, then validation and a dry run</td></tr>
+<tr><td>Widgets in app_ui</td><td>3</td><td>about 25, the main cost</td></tr>
+<tr><td>Wire</td><td>request and reply</td><td>AG-UI events: snapshot, deltas, streamed turns</td></tr>
+</table>
+<div style="display:flex;flex-direction:column;gap:8px;border-left:4px solid #B4561A;padding:8px 0 8px 32px">
+<p style="font-size:28px;font-weight:600;color:#B4561A">Not measured yet</p>
+<p style="font-size:26px;line-height:1.4;color:#4A5260">A tap’s round trip through the Cloudflare tunnel; how often the model writes a valid bundle (phase 0: an eval of 10 requests turned into bundles); whether we can reuse a Dart AG-UI client or must write the event decoder ourselves.</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">Impact</p>
+<aside>The numbers come from the bench and coverage data in my_own_app pull request 2. The AG-UI row is new in this version.</aside>
+</section>
+<section id="decisions" style="background:#F6F4EF;color:#1B1F27;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">Decisions</h2>
+<table style="font-size:24px;color:#1B1F27">
+<tr><th style="width:24%">Decision</th><th style="width:34%">Recommended</th><th style="width:42%">Cost of the other</th></tr>
+<tr><td>1. Where actions run</td><td><b>isolated-vm in a worker</b></td><td>QuickJS is 5× slower per MB; the device needs sync</td></tr>
+<tr><td>2. Action contract</td><td><b>declared paths in, JSON Patch out</b></td><td>the whole state is 30× slower at 1 MB, and grows</td></tr>
+<tr style="background:#E3F0EC"><td>3. Wire (new)</td><td><b>AG-UI events, with A2UI as the screen payload</b></td><td>A2UI alone streams nothing, and an array edit rewrites the whole value</td></tr>
+<tr><td>4. Renderer</td><td><b>our own A2UI subset over app_ui</b></td><td>genui pulls in media players and is prompt-first</td></tr>
+<tr><td>5. How a change lands</td><td><b>preview, then Aplicar; versioned</b></td><td>no undo for an app the person relies on</td></tr>
+<tr><td>6. Sharing (tier 4)</td><td><b>later</b></td><td>permissions and concurrent writes now</td></tr>
+<tr><td>7. First build</td><td><b>tiers 1 and 2</b></td><td>tier 1 alone can’t build the trip example</td></tr>
+</table>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7280">Open question: should an app be shareable with other people? This RFC recommends leaving it for later.</p>
+<aside>Decision 3 is new in this version. The rest are from pull request 2, shortened. Decision 6 is the open question from the issue.</aside>
+</section>
+<section id="sources" style="background:#14181F;color:#F6F4EF;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-size:64px;font-weight:600;line-height:1.15">Go deeper</h2>
+<table style="font-size:26px;color:#E6E8EF">
+<tr><th style="width:38%">Idea</th><th style="width:62%">Read</th></tr>
+<tr><td>Screen and data are separate</td><td><a href="https://a2ui.org/specification/v0.9-a2ui/">A2UI v0.9 spec</a> · <a href="https://a2ui.org/concepts/actions/">A2UI actions</a></td></tr>
+<tr><td>State as a snapshot plus JSON Patch</td><td><a href="https://docs.ag-ui.com/concepts/state">AG-UI, State Management</a> · RFC 6902</td></tr>
+<tr><td>A function declares its input</td><td><a href="https://shopify.dev/docs/api/functions/current">Shopify Functions</a></td></tr>
+<tr><td>Agent-written code is untrusted</td><td><a href="https://nodejs.org/api/vm.html">Node vm</a> · <a href="https://github.com/laverdet/isolated-vm">isolated-vm</a> · <a href="https://github.com/justjake/quickjs-emscripten">quickjs-emscripten</a></td></tr>
+<tr><td>Build once, run many</td><td><a href="https://arxiv.org/html/2604.09577v1">Leviathan et al., Generative UI (2026)</a></td></tr>
+<tr><td>The data and bench behind the numbers</td><td><a href="https://github.com/pietroid/my_own_app/pull/2">my_own_app #2</a>: catalog.csv, sandbox-bench.csv, archetypes.csv</td></tr>
+</table>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#8A93A3">Phase 4 (the deep-research pass) has not been run on this version</p>
+<aside>Every number in the deck comes from pull request 2’s data and code. The AG-UI material comes from its documentation and has not been benchmarked.</aside>
+</section>
+</div></div>
+<div id="notes"></div>
+<div id="bar"><span id="count"></span><span id="turn"> · turn the phone sideways</span></div>
+<script>
+(() => {
+  const deck = document.getElementById('deck');
+  const slides = [...deck.querySelectorAll(':scope > section')];
+  const count = document.getElementById('count');
+  const notes = document.getElementById('notes');
+  let i = 0;
+
+  const fit = () => {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    deck.style.transform = `scale(${s})`;
+  };
+  const show = (n, push = true) => {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle('on', k === i));
+    count.textContent = `${i + 1} / ${slides.length}`;
+    const aside = slides[i].querySelector('aside');
+    notes.textContent = aside ? aside.textContent.trim() : '';
+    if (push) history.replaceState(null, '', `#${i + 1}`);
+  };
+  const fromHash = () => show((parseInt(location.hash.slice(1), 10) || 1) - 1, false);
+
+  addEventListener('resize', fit);
+  addEventListener('hashchange', fromHash);
+  addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'n' || e.key === 'N') notes.classList.toggle('on', !!notes.textContent && !notes.classList.contains('on'));
+  });
+  addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    show(e.clientX > innerWidth / 3 ? i + 1 : i - 1);
+  });
+  let x0 = null;
+  addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(dx < 0 ? i + 1 : i - 1);
+    x0 = null;
+  });
+
+  fit();
+  fromHash();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The shell of an RFC's presentation (/research, step 5). Copy it to
+  product/research/<folder>/deck.html, set the title and the fonts, and put
+  the slides where the slides comment is: one <section> per slide, drawn on a
+  1920×1080 canvas with inline styles only, speaker notes in a last <aside>.
+  Arrows, space, swipe or a click move; #3 opens slide 3; N shows the notes;
+  printing gives one page per slide. Pages serves it at research/<folder>/.
+-->
+<title>RFC</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root { --stage: #0e1116; --chrome: #8a93a3; }
+  html, body { margin: 0; height: 100%; background: var(--stage); overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #deck { position: relative; width: 1920px; height: 1080px; flex: none; }
+  #deck > section { position: absolute; inset: 0; box-sizing: border-box; overflow: hidden; }
+  #deck > section:not(.on) { display: none !important; }
+  #deck * { margin: 0; box-sizing: border-box; }
+  #deck aside { display: none; }
+  #deck ul, #deck ol { padding-left: 1.2em; }
+  #deck table { border-collapse: collapse; width: 100%; }
+  #deck th, #deck td { text-align: left; vertical-align: top; padding: .35em .6em;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+  #deck th { font-weight: 600; }
+  #deck a { color: inherit; text-decoration: underline; text-underline-offset: .15em; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 8px; text-align: center;
+    font: 13px/1.4 system-ui, sans-serif; color: var(--chrome); pointer-events: none; }
+  #turn { display: none; }
+  @media (orientation: portrait) and (max-width: 700px) { #turn { display: inline; } }
+  #notes { position: fixed; left: 16px; right: 16px; bottom: 36px; max-width: 900px; margin: 0 auto;
+    padding: 16px 20px; background: #1a1f27; color: #e6e8ef; border-radius: 10px;
+    font: 16px/1.5 system-ui, sans-serif; display: none; }
+  #notes.on { display: block; }
+  @media print {
+    @page { size: 1920px 1080px; margin: 0; }
+    html, body { height: auto; overflow: visible; background: none; }
+    #stage { position: static; display: block; }
+    #deck { transform: none !important; width: auto; height: auto; }
+    #deck > section { position: relative; width: 1920px; height: 1080px; break-after: page; }
+    #deck > section:not(.on) { display: revert !important; }
+    #bar, #notes { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div id="deck">
+<!-- slides -->
+</div></div>
+<div id="notes"></div>
+<div id="bar"><span id="count"></span><span id="turn"> · turn the phone sideways</span></div>
+<script>
+(() => {
+  const deck = document.getElementById('deck');
+  const slides = [...deck.querySelectorAll(':scope > section')];
+  const count = document.getElementById('count');
+  const notes = document.getElementById('notes');
+  let i = 0;
+
+  const fit = () => {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    deck.style.transform = `scale(${s})`;
+  };
+  const show = (n, push = true) => {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle('on', k === i));
+    count.textContent = `${i + 1} / ${slides.length}`;
+    const aside = slides[i].querySelector('aside');
+    notes.textContent = aside ? aside.textContent.trim() : '';
+    if (push) history.replaceState(null, '', `#${i + 1}`);
+  };
+  const fromHash = () => show((parseInt(location.hash.slice(1), 10) || 1) - 1, false);
+
+  addEventListener('resize', fit);
+  addEventListener('hashchange', fromHash);
+  addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'n' || e.key === 'N') notes.classList.toggle('on', !!notes.textContent && !notes.classList.contains('on'));
+  });
+  addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    show(e.clientX > innerWidth / 3 ? i + 1 : i - 1);
+  });
+  let x0 = null;
+  addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(dx < 0 ? i + 1 : i - 1);
+    x0 = null;
+  });
+
+  fit();
+  fromHash();
+})();
+</script>
+</body>
+</html>
