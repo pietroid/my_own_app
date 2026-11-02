@@ -8,9 +8,17 @@ import {
 } from '../assistant/openrouter.client';
 import { DB } from '../db/db';
 import type { Database } from '../db/db';
-import { appVersion, generatedApp } from '../db/schema';
-import { Bundle, InvalidBundleError, parseBundle } from './bundle';
+import { AppForm, appVersion, generatedApp } from '../db/schema';
+import {
+  ActionDef,
+  ActionPlace,
+  Bundle,
+  InvalidBundleError,
+  parseBundle,
+} from './bundle';
+import { ICONS } from './catalog';
 import { Changes, describeApp, diff, EDIT_TOOLS, runEdit } from './edit';
+import { platformCalls } from './platform';
 import { ActionFailedError, ActionRunner } from './runner';
 
 /**
@@ -23,13 +31,19 @@ export interface AppSnapshot {
   name: string;
   ui: Bundle['ui'];
   data: Record<string, unknown>;
-  actions: Record<
-    string,
-    { on: 'server' | 'client'; input: string[]; evc: string }
-  >;
+  actions: Record<string, { on: ActionPlace; input: string[]; evc: string }>;
   rev: number;
   /** The version this is: the app's current one, or the one asked for. */
   version: number;
+  /** What it is made for. */
+  form: AppForm;
+}
+
+/** An app in the person's list. */
+export interface AppSummary {
+  id: string;
+  name: string;
+  form: AppForm;
 }
 
 /** One point of an app's history, as the conversation shows it. */
@@ -95,9 +109,13 @@ export class AppsService {
     return this._model.configured;
   }
 
-  async list(userId: string): Promise<{ id: string; name: string }[]> {
+  async list(userId: string): Promise<AppSummary[]> {
     return this._db
-      .select({ id: generatedApp.id, name: generatedApp.name })
+      .select({
+        id: generatedApp.id,
+        name: generatedApp.name,
+        form: generatedApp.form,
+      })
       .from(generatedApp)
       .where(eq(generatedApp.userId, userId))
       .orderBy(desc(generatedApp.createdAt));
@@ -134,7 +152,13 @@ export class AppsService {
     const version = await this._versionRow(id, n);
     const actions = await this._fresh(version.actions as Bundle['actions']);
     return snapshot(
-      { ...row, name: version.name, ui: version.ui, data: version.data },
+      {
+        ...row,
+        name: version.name,
+        ui: version.ui,
+        data: version.data,
+        form: version.form,
+      },
       actions,
       n,
     );
@@ -177,6 +201,7 @@ export class AppsService {
         role: 'user',
         content: [
           `The app now:\n${describeApp(base)}`,
+          FORMS[row.form],
           focused
             ? `The person selected the component "${focused.id}" (${focused.component}): the request is about it.`
             : '',
@@ -208,6 +233,7 @@ export class AppsService {
 
     return this._commit(userId, id, row, {
       prompt,
+      form: row.form,
       reply: result.reply,
       bundle: result.bundle,
       changes: result.changes,
@@ -244,26 +270,62 @@ export class AppsService {
         .join();
     return this._commit(userId, id, row, {
       prompt: '',
+      form: version.form,
       reply: '',
       bundle,
-      changes: { ...diff(bundleOf(row), bundle), restoredFrom: n },
+      changes: {
+        ...diff(bundleOf(row), bundle),
+        restoredFrom: n,
+        ...(version.form !== row.form ? { form: version.form } : {}),
+      },
       data: (fresh) =>
         keys(fresh) === keys(bundle.data) ? fresh : bundle.data,
     });
   }
 
+  /**
+   * Switches what the app is made for, as a version of its own: the screen
+   * stays as it is, and the model hears of the form from the next request.
+   * Switching to the form it has already changes nothing.
+   */
+  async setForm(
+    userId: string,
+    id: string,
+    form: AppForm,
+  ): Promise<EditOutcome> {
+    const row = await this._row(userId, id);
+    await this._firstVersion(row);
+    if (row.form === form) {
+      const current = await this._versionRow(id, row.version);
+      return { version: summary(current), app: await this.get(userId, id) };
+    }
+    return this._commit(userId, id, row, {
+      prompt: '',
+      form,
+      reply: '',
+      bundle: bundleOf(row),
+      changes: { ...diff(bundleOf(row), bundleOf(row)), form },
+      data: (fresh) => fresh,
+    });
+  }
+
   /** Has the model write a bundle for [prompt], checks it, and keeps it. */
-  async create(userId: string, prompt: string): Promise<AppSnapshot> {
-    const bundle = await this._build(prompt);
+  async create(
+    userId: string,
+    prompt: string,
+    form: AppForm = 'mobile',
+  ): Promise<AppSnapshot> {
+    const bundle = await this._build(prompt, form);
     const row = await this._db.transaction(async (tx) => {
       const [app] = await tx
         .insert(generatedApp)
-        .values({ userId, prompt, ...bundle })
+        .values({ userId, prompt, form, ...bundle })
         .returning();
       await tx.insert(appVersion).values({
         appId: app.id,
         n: 1,
         prompt,
+        form,
         ...bundle,
         changes: created(bundle),
       });
@@ -290,15 +352,12 @@ export class AppsService {
       throw new ActionFailedError(`no server action ${action}`);
     }
 
-    const data = row.data as Record<string, unknown>;
-    const input: Record<string, unknown> = {};
-    for (const path of def.input) {
-      try {
-        input[path] = path === '' ? data : getValueByPointer(data, path);
-      } catch {
-        input[path] = undefined;
-      }
+    if (def.on === 'platform') {
+      return this._actPlatform(userId, row, def, event);
     }
+
+    const data = row.data as Record<string, unknown>;
+    const input = inputOf(data, def.input);
 
     const delta = (await this._runner.run(
       def.evc!,
@@ -337,7 +396,7 @@ export class AppsService {
       .from(generatedApp)
       .where(eq(generatedApp.id, id));
     if (!row) throw new AppNotFoundError();
-    const bundle = await this._build(row.prompt);
+    const bundle = await this._build(row.prompt, row.form);
     const old = row.data as Record<string, unknown>;
     const sameShape =
       keepData &&
@@ -375,6 +434,59 @@ export class AppsService {
   }
 
   /**
+   * A platform action: runs here only, reaching the person's apps through
+   * `call` (`platform.ts`). It may take as long as a build, and other taps
+   * land meanwhile, so its patch goes on top of the data as it is when it
+   * ends, not under a rev check against the data it read: the calls it
+   * made cannot be taken back to try again.
+   */
+  private async _actPlatform(
+    userId: string,
+    row: Awaited<ReturnType<AppsService['_row']>>,
+    def: ActionDef,
+    event: Record<string, unknown>,
+  ): Promise<StateDelta> {
+    const calls = platformCalls(this, userId);
+    let delta: Operation[];
+    try {
+      delta = (await this._runner.run(
+        def.evc!,
+        inputOf(row.data as Record<string, unknown>, def.input),
+        event,
+        calls.call,
+      )) as Operation[];
+    } catch (error) {
+      // A refused call failed it: the person reads why.
+      throw calls.refused() ?? error;
+    }
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const [now] = await this._db
+        .select({ rev: generatedApp.rev, data: generatedApp.data })
+        .from(generatedApp)
+        .where(eq(generatedApp.id, row.id));
+      if (!now) throw new AppNotFoundError();
+      let next: unknown;
+      try {
+        next = applyPatch(now.data, delta, true, false).newDocument;
+      } catch (error) {
+        throw new ActionFailedError(
+          `bad patch: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      const updated = await this._db
+        .update(generatedApp)
+        .set({ data: next, rev: now.rev + 1 })
+        .where(and(eq(generatedApp.id, row.id), eq(generatedApp.rev, now.rev)))
+        .returning({ rev: generatedApp.rev });
+      if (updated.length > 0) {
+        return { type: 'STATE_DELTA', delta, rev: updated[0].rev };
+      }
+    }
+    throw new AppConflictError();
+  }
+
+  /**
    * Keeps [change] as version `row.version + 1` and makes it the app, if
    * no other edit landed first. Taps may land meanwhile: [change.data] is
    * given the data as it is then, and asked again if a tap beats it.
@@ -385,6 +497,7 @@ export class AppsService {
     row: Awaited<ReturnType<AppsService['_row']>>,
     change: {
       prompt: string;
+      form: AppForm;
       reply: string;
       bundle: Bundle;
       changes: Changes;
@@ -417,6 +530,7 @@ export class AppsService {
             ui: change.bundle.ui,
             actions: change.bundle.actions,
             data,
+            form: change.form,
             rev: now.rev + 1,
             version: n,
           })
@@ -434,6 +548,7 @@ export class AppsService {
             ui: change.bundle.ui,
             data,
             actions: change.bundle.actions,
+            form: change.form,
             changes: change.changes,
           })
           .returning();
@@ -463,6 +578,7 @@ export class AppsService {
         appId: row.id,
         n: row.version,
         prompt: row.prompt,
+        form: row.form,
         ...bundle,
         changes: created(bundle),
       })
@@ -533,10 +649,10 @@ export class AppsService {
   }
 
   /** One build turn, and one more with the error when the first is wrong. */
-  private async _build(prompt: string): Promise<Bundle> {
+  private async _build(prompt: string, form: AppForm): Promise<Bundle> {
     const messages: ChatMessage[] = [
       { role: 'system', content: BUILD_PROMPT },
-      { role: 'user', content: prompt },
+      { role: 'user', content: `${FORMS[form]}\n\n${prompt}` },
     ];
     const started = Date.now();
 
@@ -635,15 +751,40 @@ Where an action runs. Every action runs on the person's device the moment they t
 - "server" (the default): saved. The device shows its patch at once, then the server runs the same action on its own copy of the data and keeps the patch. Anything that must still be there tomorrow is a server action, and most actions are. Because it also runs on the server, where nothing typed on the device exists, a server action reads what the person typed only from the event (a button's context, {"title": {"path": "/draft"}}), never from input; input is for saved data (the list, a total). It can clear the field in the same patch.
 - "client": not saved; only for screen-only state (a filter, a tab, a form step). Its third argument, call: "final List kept = await call('save_item', {'title': title});" runs a server action and resolves to its patch. Never write a client action that only calls a server one: write the server action and point the button at it.
 
-Components (every one has "id" and "component"):
-- Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index".
-- Text: "text" is a string or {"path"}; "variant" is "title", "body" or "caption".
-- TextField: "label" (string) and "value" {"path"}. Typing writes to that path on the device only; send it with a button's context.
-- CheckBox: "label" (string or {"path"}), "value" {"path"} (a boolean), and "action". It does not change anything itself: its action must.
-- Button: "label" (string) and "action".
+Components (every one has "id" and "component"). Any component may also have "visible" ({"path"}: drawn only when the value is something, not null, false, 0, "" or empty; or {"path", "is": value}: only when it equals value), "weight" (a number: inside a Row, its share of the width) and "inset" (a number or {"path"}: steps of indentation from the left).
+Besides the data, components (never actions) may read /$viewport/width, /$viewport/height and /$viewport/size ("compact" for a phone, "medium", "expanded" for a wide window), and /$pending/<action name>: the event of a platform action on its way, missing when none is.
+Layout:
+- Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index". Column and Row take "justify" (start, center, end, spaceBetween) and "align" (start, center, end, stretch). A List may be "direction": "horizontal" (a strip that scrolls sideways). A Column or Row with "action" is tapped whole.
+- Card: "child" (one id), drawn on a raised surface; with "action", the whole card is tappable.
+- Divider: a thin line.
+- Tabs: "tabs" [{"title": "...", "child": "<id>"}]; optionally "value" {"path"} holding the title of the open tab.
+- Pages: one screen at a time, for an app with several screens. "pages" {"<page name>": "<id>"} and "current" {"path": "/page"} (a page name); the first page shows when current is empty. Navigate with a client action that replaces /page.
+- Modal: "content" (one id) shown as a sheet over the screen while "open" {"path"} is true; tapping outside sets it false.
+Display:
+- Text: "text" is a string or {"path"}; "variant" is "h1", "h2", "h3", "body" or "caption"; "tone" is "muted", "accent", "positive" or "negative".
+- Icon: "name" (a string or {"path"}), one of: ${ICONS.join(', ')}; or "component:<a component>" for that component's own icon. "tone" as Text.
+- Image: "url" (https only, or {"path"}), "fit" (cover, contain), "variant" (avatar, smallFeature, mediumFeature, largeFeature, header).
+- Badge: "text" and "tone": a small pill, for a count or a state.
+- Message: a chat bubble. "text", "role" ("me" on the right, "other" on the left), optional "caption" under it.
+Input (what is typed or picked lives on the device until an action sends it from the event):
+- TextField: "label" (string) and "value" {"path"}; "variant" "longText" (several lines), "number" or "obscured"; with "action", pressing enter runs it.
+- CheckBox / Switch: "label" and "value" {"path"} (a boolean). Without "action" a tap flips the value on the device; with "action" it runs the action instead, with event.value the new value, and the action must change it.
+- ChoicePicker: "options" [{"label", "value"}] (or {"path"} to such a list), "value" {"path"} (a list of the chosen values), "variant" "mutuallyExclusive" or "multipleSelection". Optional "action", as CheckBox.
+- Slider: "label", "min", "max", "value" {"path"} (a number). Optional "action", run when the thumb is let go, with event.value.
+- DateTimeInput: "label", "value" {"path"} (an ISO 8601 string), "enableDate", "enableTime". Optional "action", as CheckBox.
+- Button: "label" (string), "action", optional "icon" (an icon name) and "variant" ("primary" for the one main thing on the screen, "default", "borderless").
+Engine:
+- Surface: another of the person's apps, drawn and running inside this one. "app" (an app id, usually {"path"}), "frame" ("auto": in a phone or a browser by that app's form; "none"), "version" (a number: show that version, read-only), "revision" ({"path"}: when its value changes, the app is loaded again), "picking" ({"path"}, a boolean: taps pick a component instead of running it, and fire "action" with event.componentId), "selected" ({"path"}: the id of the component outlined).
 An action reference is {"event": {"name": "<action name>", "context": {"key": {"path": "/draft"} or a literal}}}; the context values reach run as event.key.
 
 All text the person reads is in Brazilian Portuguese.`;
+
+/** What the model is told of the app's form, with each request. */
+const FORMS: Record<AppForm, string> = {
+  mobile:
+    'The app is for a phone: one narrow column, about 390 wide. Several screens go in Pages.',
+  web: 'The app is for the web, in a browser on a wide screen (1000 or more wide): lay it out side by side with Rows and weights (a navigation or list column beside the main area), not as one long column. Several screens go in Pages.',
+};
 
 /** A whole app, as the build prompt shows it. */
 const EXAMPLE = `{"name": "Tarefas",
@@ -666,7 +807,7 @@ const EXAMPLE = `{"name": "Tarefas",
  }}`;
 
 /** How the model writes a bundle. Kept in English; the app's words are pt-BR. */
-export const BUILD_PROMPT = `You build small single-screen apps for a phone. Answer only by calling create_app.
+export const BUILD_PROMPT = `You build small apps for a phone. Answer only by calling create_app.
 
 ${RULES}
 
@@ -677,7 +818,7 @@ ${EXAMPLE}`;
  * How the model changes an app the person has: by tools, touching only
  * what the request is about.
  */
-export const EDIT_PROMPT = `You change a small single-screen phone app the person already has, as they ask. You get the app as it is now: its name, data, ui, and its actions by name and input (not their code).
+export const EDIT_PROMPT = `You change a small phone app the person already has, as they ask. You get the app as it is now: its name, data, ui, and its actions by name and input (not their code).
 
 Change it with the tools, touching only what the request is about:
 - set_components / remove_components for the screen. Send each component you change complete. A new component must be listed in its parent's children.
@@ -707,9 +848,32 @@ function bundleOf(row: {
   };
 }
 
+/** What an action reads of [data]: each of [paths], keyed by itself. */
+function inputOf(
+  data: Record<string, unknown>,
+  paths: string[],
+): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  for (const path of paths) {
+    try {
+      input[path] = path === '' ? data : getValueByPointer(data, path);
+    } catch {
+      input[path] = undefined;
+    }
+  }
+  return input;
+}
+
 /** What the app reads: every action's bytecode, never its source. */
 function snapshot(
-  row: { id: string; name: string; ui: unknown; data: unknown; rev: number },
+  row: {
+    id: string;
+    name: string;
+    ui: unknown;
+    data: unknown;
+    rev: number;
+    form: AppForm;
+  },
   defs: Bundle['actions'],
   version: number,
 ): AppSnapshot {
@@ -725,6 +889,7 @@ function snapshot(
     actions,
     rev: row.rev,
     version,
+    form: row.form,
   };
 }
 

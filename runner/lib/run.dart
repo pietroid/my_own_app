@@ -16,15 +16,17 @@ import 'package:dart_eval/stdlib/core.dart';
 /// Which runner writes and reads bytecode: dart_eval's version and our
 /// changes to it. Bytecode runs only on the runner that wrote it; bump the
 /// last number when a change to `third_party/` changes what runs.
-const runnerVersion = 'dart_eval-0.8.5+steps.1+nullable-as.1';
+const runnerVersion = 'dart_eval-0.8.5+steps.1+nullable-as.1+call.2';
 
 /// How many interpreter steps one run may take, its continuations after
 /// each `await` included. About 50 ms of work on a phone; the time spent
 /// waiting on `call` does not count.
 const defaultStepLimit = 2000000;
 
-/// Runs a server action on the action's behalf: takes its name and event
-/// (JSON) and answers with the patch the server kept (JSON).
+/// What an action's `call` reaches: takes a name and an event (JSON) and
+/// answers JSON. On the device, a saved action, answering the patch the
+/// server kept; on the server, inside a platform action, a platform call
+/// (`apps.list`, ...), answering its result.
 typedef HostCall = Future<String> Function(String action, String event);
 
 /// {@template action_run_error}

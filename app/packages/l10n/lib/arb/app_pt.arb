@@ -126,5 +126,18 @@
   "componentTextField": "Campo",
   "componentCheckBox": "Caixa de seleção",
   "componentButton": "Botão",
+  "componentCard": "Cartão",
+  "componentDivider": "Divisória",
+  "componentTabs": "Abas",
+  "componentPages": "Páginas",
+  "componentModal": "Folha",
+  "componentIcon": "Ícone",
+  "componentImage": "Imagem",
+  "componentBadge": "Selo",
+  "componentMessage": "Mensagem",
+  "componentSwitch": "Interruptor",
+  "componentChoicePicker": "Escolha",
+  "componentSlider": "Controle deslizante",
+  "componentDateTimeInput": "Data e hora",
   "componentUnknown": "Componente"
 }

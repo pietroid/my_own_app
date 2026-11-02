@@ -88,7 +88,12 @@ class AppsCubit extends Cubit<AppsState> {
 /// {@endtemplate}
 class AppRunState extends Equatable {
   /// {@macro app_run_state}
-  const AppRunState({this.app, this.loadFailed = false, this.error});
+  const AppRunState({
+    this.app,
+    this.loadFailed = false,
+    this.error,
+    this.pending = const {},
+  });
 
   /// The app, once loaded.
   final AppSnapshot? app;
@@ -99,8 +104,13 @@ class AppRunState extends Equatable {
   /// The last tap's failure, in the person's words.
   final String? error;
 
+  /// The platform actions on their way, by name, each with its event: what
+  /// the screen reads at `/$pending/<name>` (a request's bubble, the typing
+  /// dots) while the server works.
+  final Map<String, Map<String, Object?>> pending;
+
   @override
-  List<Object?> get props => [app, loadFailed, error];
+  List<Object?> get props => [app, loadFailed, error, pending];
 }
 
 /// {@template app_run_cubit}
@@ -112,7 +122,9 @@ class AppRunState extends Equatable {
 /// the patch. When the server's patch is the one shown, nothing more
 /// happens; when it differs, or the server refuses, the server's copy is
 /// loaded again (and the refusal shown). A client action's patch only
-/// changes the screen; the saved actions it `call`s work as above.
+/// changes the screen; the saved actions it `call`s work as above. A
+/// platform action (`on: "platform"`) runs on the server only: the screen
+/// shows it in flight (`/$pending`) and changes when it answers.
 /// {@endtemplate}
 class AppRunCubit extends Cubit<AppRunState> {
   /// {@macro app_run_cubit}
@@ -134,7 +146,7 @@ class AppRunCubit extends Cubit<AppRunState> {
   Future<void> load() async {
     try {
       final app = await _repository.get(_id);
-      if (!isClosed) emit(AppRunState(app: app));
+      if (!isClosed) emit(AppRunState(app: app, pending: state.pending));
     } on DioException {
       if (!isClosed) emit(const AppRunState(loadFailed: true));
     }
@@ -142,12 +154,12 @@ class AppRunCubit extends Cubit<AppRunState> {
 
   /// The app as an edit left it: its new screen, actions and data.
   void replace(AppSnapshot app) {
-    if (!isClosed) emit(AppRunState(app: app));
+    if (!isClosed) emit(AppRunState(app: app, pending: state.pending));
   }
 
   /// What the person typed into a field: kept on the device until a button
   /// sends it.
-  void edit(String path, String value) {
+  void edit(String path, Object? value) {
     final app = state.app;
     if (app == null) return;
     _emitData(
@@ -191,6 +203,7 @@ class AppRunCubit extends Cubit<AppRunState> {
     if (def == null || !def.saved) {
       throw const ClientActionFailed('called an action that is not saved');
     }
+    if (def.platform) return _platform(action, event);
     List<dynamic>? shown;
     try {
       shown = await _run(def, event, call: _noCall);
@@ -221,6 +234,24 @@ class AppRunCubit extends Cubit<AppRunState> {
       ),
     );
     return mine;
+  }
+
+  /// A platform action: the server runs it (it may take as long as a
+  /// build) and its patch is shown when it answers. It is not queued behind
+  /// the saved actions, nor they behind it: the server puts its patch on
+  /// the data as it is when it ends. Meanwhile it is in [AppRunState.pending].
+  Future<List<dynamic>> _platform(
+    String action,
+    Map<String, Object?> event,
+  ) async {
+    _emitPending({...state.pending, action: event});
+    try {
+      final delta = await _repository.act(_id, action, event);
+      _apply(delta);
+      return delta;
+    } finally {
+      _emitPending({...state.pending}..remove(action));
+    }
   }
 
   Future<List<dynamic>> _run(
@@ -255,10 +286,24 @@ class AppRunCubit extends Cubit<AppRunState> {
   }
 
   void _emitError(String error) {
-    if (!isClosed) emit(AppRunState(app: state.app, error: error));
+    if (!isClosed) {
+      emit(AppRunState(app: state.app, error: error, pending: state.pending));
+    }
   }
 
   void _emitData(Map<String, dynamic> data) {
-    if (!isClosed) emit(AppRunState(app: state.app!.withData(data)));
+    if (!isClosed) {
+      emit(
+        AppRunState(app: state.app!.withData(data), pending: state.pending),
+      );
+    }
+  }
+
+  void _emitPending(Map<String, Map<String, Object?>> pending) {
+    if (!isClosed) {
+      emit(
+        AppRunState(app: state.app, error: state.error, pending: pending),
+      );
+    }
   }
 }

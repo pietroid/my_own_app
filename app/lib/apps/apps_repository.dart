@@ -1,12 +1,28 @@
 import 'package:api_client/api_client.dart';
 import 'package:equatable/equatable.dart';
 
+/// What an app is made for.
+enum AppForm {
+  /// A phone: one narrow column.
+  mobile,
+
+  /// A browser on a wide screen.
+  web;
+
+  /// From the server's name for it; a phone when it says nothing.
+  static AppForm of(Object? name) => name == 'web' ? web : mobile;
+}
+
 /// {@template app_summary}
 /// One app in the person's list.
 /// {@endtemplate}
 class AppSummary extends Equatable {
   /// {@macro app_summary}
-  const AppSummary({required this.id, required this.name});
+  const AppSummary({
+    required this.id,
+    required this.name,
+    this.form = AppForm.mobile,
+  });
 
   /// The app's id.
   final String id;
@@ -14,8 +30,11 @@ class AppSummary extends Equatable {
   /// What it is called.
   final String name;
 
+  /// What it is made for.
+  final AppForm form;
+
   @override
-  List<Object?> get props => [id, name];
+  List<Object?> get props => [id, name, form];
 }
 
 /// {@template app_action}
@@ -24,11 +43,17 @@ class AppSummary extends Equatable {
 /// {@endtemplate}
 class AppAction extends Equatable {
   /// {@macro app_action}
-  const AppAction({required this.input, required this.evc, this.saved = true});
+  const AppAction({
+    required this.input,
+    required this.evc,
+    this.saved = true,
+    this.platform = false,
+  });
 
   /// From one entry of `actions` in `GET /apps/:id`.
   factory AppAction.fromJson(Map<String, dynamic> json) => AppAction(
     saved: json['on'] != 'client',
+    platform: json['on'] == 'platform',
     input: [for (final path in json['input'] as List<dynamic>) '$path'],
     evc: json['evc'] as String,
   );
@@ -36,6 +61,11 @@ class AppAction extends Equatable {
   /// Whether the server keeps what it changes (`on: "server"`); a client
   /// action only changes the screen.
   final bool saved;
+
+  /// Whether it runs on the server only (`on: "platform"`): it reaches the
+  /// person's apps, which this device has no copy of, so it never runs
+  /// here first. It is also [saved].
+  final bool platform;
 
   /// The JSON Pointers it reads.
   final List<String> input;
@@ -45,7 +75,7 @@ class AppAction extends Equatable {
   final String evc;
 
   @override
-  List<Object?> get props => [saved, input, evc];
+  List<Object?> get props => [saved, platform, input, evc];
 }
 
 /// {@template app_snapshot}
@@ -61,6 +91,7 @@ class AppSnapshot extends Equatable {
     required this.data,
     this.actions = const {},
     this.version = 1,
+    this.form = AppForm.mobile,
   });
 
   /// From `GET /apps/:id`.
@@ -78,6 +109,7 @@ class AppSnapshot extends Equatable {
         key: AppAction.fromJson(value as Map<String, dynamic>),
     },
     version: json['version'] as int? ?? 1,
+    form: AppForm.of(json['form']),
   );
 
   /// The app's id.
@@ -98,6 +130,9 @@ class AppSnapshot extends Equatable {
   /// The version of the app this is (see [AppVersion]).
   final int version;
 
+  /// What it is made for.
+  final AppForm form;
+
   /// This app with other [data].
   AppSnapshot withData(Map<String, dynamic> data) => AppSnapshot(
     id: id,
@@ -106,10 +141,11 @@ class AppSnapshot extends Equatable {
     data: data,
     actions: actions,
     version: version,
+    form: form,
   );
 
   @override
-  List<Object?> get props => [id, name, ui, data, actions, version];
+  List<Object?> get props => [id, name, ui, data, actions, version, form];
 }
 
 /// {@template app_changes}
@@ -124,6 +160,7 @@ class AppChanges extends Equatable {
     this.removedActions = const [],
     this.renamed = false,
     this.restoredFrom,
+    this.form,
   });
 
   /// From `changes` in a version.
@@ -138,6 +175,7 @@ class AppChanges extends Equatable {
       removedActions: names('removedActions'),
       renamed: json['name'] == true,
       restoredFrom: json['restoredFrom'] as int?,
+      form: json['form'] == null ? null : AppForm.of(json['form']),
     );
   }
 
@@ -159,6 +197,9 @@ class AppChanges extends Equatable {
   /// When the version brought an earlier one back: that one's number.
   final int? restoredFrom;
 
+  /// When the version switched what the app is made for: the new form.
+  final AppForm? form;
+
   /// How many components it touched.
   int get componentCount => components.length + removed.length;
 
@@ -166,7 +207,7 @@ class AppChanges extends Equatable {
   int get actionCount => actions.length + removedActions.length;
 
   /// Whether it changed the app at all.
-  bool get any => componentCount + actionCount > 0 || renamed;
+  bool get any => componentCount + actionCount > 0 || renamed || form != null;
 
   @override
   List<Object?> get props => [
@@ -176,6 +217,7 @@ class AppChanges extends Equatable {
     removedActions,
     renamed,
     restoredFrom,
+    form,
   ];
 }
 
@@ -277,6 +319,7 @@ class AppsRepository {
         AppSummary(
           id: (item as Map<String, dynamic>)['id'] as String,
           name: item['name'] as String,
+          form: AppForm.of(item['form']),
         ),
     ];
   }
@@ -287,11 +330,14 @@ class AppsRepository {
     return AppSnapshot.fromJson(response.data!);
   }
 
-  /// Has the assistant build an app from [prompt].
-  Future<AppSnapshot> create(String prompt) async {
+  /// Has the assistant build an app from [prompt], made for [form].
+  Future<AppSnapshot> create(
+    String prompt, {
+    AppForm form = AppForm.mobile,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/apps',
-      data: {'prompt': prompt},
+      data: {'prompt': prompt, 'form': form.name},
     );
     return AppSnapshot.fromJson(response.data!);
   }
@@ -331,6 +377,15 @@ class AppsRepository {
   Future<AppEdit> restore(String id, int n) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/apps/$id/versions/$n/restore',
+    );
+    return AppEdit.fromJson(response.data!);
+  }
+
+  /// Switches what the app is made for, as a new version.
+  Future<AppEdit> setForm(String id, AppForm form) async {
+    final response = await _api.patch<Map<String, dynamic>>(
+      '/apps/$id',
+      data: {'form': form.name},
     );
     return AppEdit.fromJson(response.data!);
   }

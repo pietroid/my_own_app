@@ -107,6 +107,9 @@ export const verification = pgTable(
  * functions run in a sandbox). `rev` goes up by one with every change to
  * `data`, so two taps never overwrite each other.
  */
+/** What an app is made for: a phone, or a browser on a wide screen. */
+export type AppForm = 'mobile' | 'web';
+
 export const generatedApp = pgTable(
   'generated_app',
   {
@@ -122,6 +125,8 @@ export const generatedApp = pgTable(
     rev: integer('rev').notNull().default(0),
     /** The number of the [appVersion] the app is at now. */
     version: integer('version').notNull().default(1),
+    /** What it is made for: `mobile` (a phone) or `web` (a browser). */
+    form: text('form').$type<AppForm>().notNull().default('mobile'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -147,6 +152,7 @@ export const appVersion = pgTable(
     ui: jsonb('ui').notNull(),
     data: jsonb('data').notNull(),
     actions: jsonb('actions').notNull(),
+    form: text('form').$type<AppForm>().notNull().default('mobile'),
     /** What this version changed: component ids and action names. */
     changes: jsonb('changes').notNull(),
     createdAt: createdAt(),

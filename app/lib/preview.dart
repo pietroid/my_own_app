@@ -170,7 +170,21 @@ class _FakeAppsRepository implements AppsRepository {
   Future<AppSnapshot> get(String id) async => _todo;
 
   @override
-  Future<AppSnapshot> create(String prompt) async => _todo;
+  Future<AppSnapshot> create(
+    String prompt, {
+    AppForm form = AppForm.mobile,
+  }) async => _todo;
+
+  @override
+  Future<AppEdit> setForm(String id, AppForm form) async => AppEdit(
+    version: AppVersion(
+      n: 3,
+      prompt: '',
+      reply: '',
+      changes: AppChanges(form: form),
+    ),
+    app: _todo,
+  );
 
   @override
   Future<AppHistory> history(String id) async => const AppHistory(

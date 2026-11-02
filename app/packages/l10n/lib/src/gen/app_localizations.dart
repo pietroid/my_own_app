@@ -497,6 +497,84 @@ abstract class AppLocalizations {
   /// **'Botão'**
   String get componentButton;
 
+  /// No description provided for @componentCard.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cartão'**
+  String get componentCard;
+
+  /// No description provided for @componentDivider.
+  ///
+  /// In pt, this message translates to:
+  /// **'Divisória'**
+  String get componentDivider;
+
+  /// No description provided for @componentTabs.
+  ///
+  /// In pt, this message translates to:
+  /// **'Abas'**
+  String get componentTabs;
+
+  /// No description provided for @componentPages.
+  ///
+  /// In pt, this message translates to:
+  /// **'Páginas'**
+  String get componentPages;
+
+  /// No description provided for @componentModal.
+  ///
+  /// In pt, this message translates to:
+  /// **'Folha'**
+  String get componentModal;
+
+  /// No description provided for @componentIcon.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ícone'**
+  String get componentIcon;
+
+  /// No description provided for @componentImage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Imagem'**
+  String get componentImage;
+
+  /// No description provided for @componentBadge.
+  ///
+  /// In pt, this message translates to:
+  /// **'Selo'**
+  String get componentBadge;
+
+  /// No description provided for @componentMessage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mensagem'**
+  String get componentMessage;
+
+  /// No description provided for @componentSwitch.
+  ///
+  /// In pt, this message translates to:
+  /// **'Interruptor'**
+  String get componentSwitch;
+
+  /// No description provided for @componentChoicePicker.
+  ///
+  /// In pt, this message translates to:
+  /// **'Escolha'**
+  String get componentChoicePicker;
+
+  /// No description provided for @componentSlider.
+  ///
+  /// In pt, this message translates to:
+  /// **'Controle deslizante'**
+  String get componentSlider;
+
+  /// No description provided for @componentDateTimeInput.
+  ///
+  /// In pt, this message translates to:
+  /// **'Data e hora'**
+  String get componentDateTimeInput;
+
   /// No description provided for @componentUnknown.
   ///
   /// In pt, this message translates to:

@@ -40,6 +40,8 @@ final _app = AppSnapshot(
     'add_todo': AppAction(input: const [], evc: _addTodo),
     'show': AppAction(input: const [], evc: _filter, saved: false),
     'old': const AppAction(input: [], evc: 'AAAA'),
+    // Its bytecode would fail here: a platform action must never run here.
+    'make': const AppAction(input: [], evc: 'AAAA', platform: true),
   },
 );
 
@@ -174,4 +176,59 @@ void main() {
     expect(cubit.state.app!.data['draft'], 'x');
     expect(cubit.state.error, isNull);
   });
+
+  test('a platform action runs on the server only, and is pending until '
+      'it answers', () async {
+    final answer = Completer<List<dynamic>>();
+    final idle = Completer<List<dynamic>>();
+    when(
+      () => repository.act('a', 'make', {'prompt': 'Loja'}),
+    ).thenAnswer((_) => answer.future);
+    when(
+      () => repository.act('a', 'add_todo', {'title': 'Pão'}),
+    ).thenAnswer((_) => idle.future);
+    final cubit = await open();
+
+    final making = cubit.act('make', {'prompt': 'Loja'});
+    await Future<void>.delayed(Duration.zero);
+    expect(cubit.state.pending, {
+      'make': {'prompt': 'Loja'},
+    });
+
+    // Not queued behind it: another tap goes to the server meanwhile.
+    await cubit.act('add_todo', {'title': 'Pão'});
+    await Future<void>.delayed(Duration.zero);
+    verify(() => repository.act('a', 'add_todo', {'title': 'Pão'})).called(1);
+    expect(_todos(cubit), hasLength(1));
+
+    answer.complete([
+      {'op': 'replace', 'path': '/filter', 'value': 7},
+    ]);
+    await making;
+    expect(cubit.state.pending, isEmpty);
+    expect(cubit.state.app!.data['filter'], 7);
+    expect(_todos(cubit), hasLength(1));
+    await cubit.close();
+  });
+
+  test(
+    'a refused platform action is no longer pending, and says why',
+    () async {
+      when(() => repository.act('a', 'make', any())).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(),
+          response: Response(
+            requestOptions: RequestOptions(),
+            statusCode: 422,
+            data: {'message': 'Descreva o app em poucas palavras.'},
+          ),
+        ),
+      );
+      final cubit = await open();
+      await cubit.act('make', {'prompt': ''});
+      expect(cubit.state.pending, isEmpty);
+      expect(cubit.state.error, 'Descreva o app em poucas palavras.');
+      await cubit.close();
+    },
+  );
 }

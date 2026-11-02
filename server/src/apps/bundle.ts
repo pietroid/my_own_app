@@ -1,3 +1,7 @@
+import { COMPONENTS, componentProblem, references } from './catalog';
+
+export { COMPONENTS };
+
 /**
  * An app as data: what the assistant writes once and the server keeps.
  *
@@ -20,9 +24,17 @@ export interface Bundle {
   actions: Record<string, ActionDef>;
 }
 
+/**
+ * Where an action runs: `server` (on the device first, then here, kept),
+ * `client` (on the device only, not kept), or `platform` (here only: it
+ * may `call` the person's apps, `apps.list` and the rest, see
+ * `platform.ts`; the device waits for it).
+ */
+export type ActionPlace = 'server' | 'client' | 'platform';
+
 export interface ActionDef {
   /** Where it runs: here, kept (the default), or on the device, not kept. */
-  on?: 'server' | 'client';
+  on?: ActionPlace;
   /** The JSON Pointers the action reads; `run` gets them keyed by path. */
   input: string[];
   /** `Future<List> run(Map input, Map event, Function call) async { ... }` */
@@ -37,17 +49,6 @@ export type Component = { id: string; component: string } & Record<
   string,
   unknown
 >;
-
-/** The components the app knows how to draw. */
-export const COMPONENTS = [
-  'Column',
-  'Row',
-  'List',
-  'Text',
-  'TextField',
-  'CheckBox',
-  'Button',
-] as const;
 
 /** Raised when a bundle breaks the rules; the message says which. */
 export class InvalidBundleError extends Error {}
@@ -111,6 +112,12 @@ export function parseBundle(value: unknown): Bundle {
       }
     }
 
+    for (const ref of references(component)) {
+      if (!ids.has(ref)) fail(`${component.id}: unknown component ${ref}`);
+    }
+    const problem = componentProblem(component);
+    if (problem) fail(`${component.id}: ${problem}`);
+
     const action = component.action as
       { event?: { name?: unknown } } | undefined;
     if (action !== undefined) {
@@ -133,9 +140,10 @@ export function parseBundle(value: unknown): Bundle {
     if (
       action.on !== undefined &&
       action.on !== 'server' &&
-      action.on !== 'client'
+      action.on !== 'client' &&
+      action.on !== 'platform'
     ) {
-      fail(`${actionName}: on must be "server" or "client"`);
+      fail(`${actionName}: on must be "server", "client" or "platform"`);
     }
     if (typeof action.code !== 'string' || !action.code.includes('run')) {
       fail(

@@ -51,4 +51,7 @@ abstract final class AppColors {
 
   /// The glass of a drawn phone where nothing lights it: the island.
   static const device = Color(0xFF000000);
+
+  /// What dims the screen behind a sheet.
+  static const scrim = Color(0x99000000);
 }

@@ -133,9 +133,17 @@ class _Studio extends StatelessWidget {
                 spacing: AppSpacing.s4,
                 children: [
                   if (state.viewing case final n?) _ViewingBar(n: n),
-                  const Expanded(
+                  Expanded(
                     child: Center(
-                      child: AppPhoneFrame(child: _AppScreen(framed: true)),
+                      // A web app is drawn in a browser window, laid out wide.
+                      child: shown?.form == AppForm.web
+                          ? AppBrowserFrame(
+                              address: shown!.name,
+                              child: const _AppScreen(framed: true),
+                            )
+                          : const AppPhoneFrame(
+                              child: _AppScreen(framed: true),
+                            ),
                     ),
                   ),
                 ],
@@ -287,8 +295,12 @@ class _AppScreen extends StatelessWidget {
             body: app != null
                 ? Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: AppSpacing.maxContentWidth,
+                      // A web app takes the width it is given; a phone app
+                      // keeps to a column.
+                      constraints: BoxConstraints(
+                        maxWidth: app.form == AppForm.web
+                            ? double.infinity
+                            : AppSpacing.maxContentWidth,
                       ),
                       child: ListView(
                         padding: const EdgeInsets.all(AppSpacing.s6),
@@ -307,6 +319,7 @@ class _AppScreen extends StatelessWidget {
                               onEdit: cubit.edit,
                               onAction: (action, event) =>
                                   unawaited(cubit.act(action, event)),
+                              pending: state.pending,
                               onSelect: studio.state.selecting
                                   ? studio.select
                                   : null,

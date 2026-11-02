@@ -13,8 +13,18 @@ const RUN_TIMEOUT_MS = 2_000;
 /** The process's heap, all requests together. Past it the process dies. */
 const DEFAULT_HEAP_MB = 128;
 
+/**
+ * What a platform action's `call` reaches here: a name and its event,
+ * answering anything JSON. A throw fails the action with its message.
+ */
+export type PlatformCall = (
+  name: string,
+  event: Record<string, unknown>,
+) => Promise<unknown>;
+
 interface Answer {
   id: number;
+  call?: { seq: number; name: string; event: string };
   evc?: string;
   version?: string;
   patch?: string;
@@ -25,7 +35,12 @@ interface Answer {
 interface Waiting {
   resolve: (answer: Answer) => void;
   reject: (error: Error) => void;
-  timer: NodeJS.Timeout;
+  timer?: NodeJS.Timeout;
+  /** Starts (again) the clock on this request. */
+  arm: () => void;
+  onCall?: PlatformCall;
+  /** Calls answered from here and not yet back: the clock stops for them. */
+  calling: number;
 }
 
 /**
@@ -80,11 +95,16 @@ export class ActionRunner implements OnModuleDestroy {
     });
   }
 
-  /** Runs the action in [evc] and answers with its JSON Patch. */
+  /**
+   * Runs the action in [evc] and answers with its JSON Patch. With
+   * [onCall] (a platform action), its `call` reaches it; the time spent
+   * waiting on it does not count against the run's.
+   */
   async run(
     evc: string,
     input: Record<string, unknown>,
     event: Record<string, unknown>,
+    onCall?: PlatformCall,
   ): Promise<unknown> {
     const answer = await this._send(
       {
@@ -92,8 +112,10 @@ export class ActionRunner implements OnModuleDestroy {
         evc,
         input: JSON.stringify(input),
         event: JSON.stringify(event),
+        ...(onCall ? { calls: true } : {}),
       },
       RUN_TIMEOUT_MS,
+      onCall,
     );
     if (answer.patch === undefined) {
       throw new ActionFailedError(answer.error ?? 'no patch');
@@ -108,18 +130,58 @@ export class ActionRunner implements OnModuleDestroy {
   private _send(
     request: Record<string, unknown>,
     timeoutMs: number,
+    onCall?: PlatformCall,
   ): Promise<Answer> {
     const child = this._start();
     const id = this._next++;
     return new Promise<Answer>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        // Stuck: whatever it is doing, start over.
-        this._log.warn(`action runner took over ${timeoutMs} ms; restarting`);
-        child.kill('SIGKILL');
-      }, timeoutMs);
-      this._waiting.set(id, { resolve, reject, timer });
+      const waiting: Waiting = {
+        resolve,
+        reject,
+        onCall,
+        calling: 0,
+        arm: () => {
+          clearTimeout(waiting.timer);
+          waiting.timer = setTimeout(() => {
+            // Stuck: whatever it is doing, start over.
+            this._log.warn(
+              `action runner took over ${timeoutMs} ms; restarting`,
+            );
+            child.kill('SIGKILL');
+          }, timeoutMs);
+        },
+      };
+      waiting.arm();
+      this._waiting.set(id, waiting);
       child.stdin.write(`${JSON.stringify({ ...request, id })}\n`);
     });
+  }
+
+  /** Answers a run's `call` with what [waiting.onCall] gives. */
+  private async _answerCall(
+    child: ChildProcessWithoutNullStreams,
+    id: number,
+    waiting: Waiting,
+    call: NonNullable<Answer['call']>,
+  ): Promise<void> {
+    // The run waits on us, not on itself: its clock stops meanwhile.
+    clearTimeout(waiting.timer);
+    waiting.calling++;
+    let reply: Record<string, unknown>;
+    try {
+      if (!waiting.onCall) throw new Error('this action calls nothing');
+      const event = JSON.parse(call.event) as Record<string, unknown>;
+      const result = await waiting.onCall(call.name, event);
+      reply = { result: JSON.stringify(result ?? null) };
+    } catch (error) {
+      reply = { error: error instanceof Error ? error.message : String(error) };
+    }
+    waiting.calling--;
+    if (this._waiting.get(id) !== waiting) return;
+    if (waiting.calling === 0) waiting.arm();
+    child.stdin.write(
+      `${JSON.stringify({ id, type: 'answer', seq: call.seq, ...reply })}\n`,
+    );
   }
 
   private _start(): ChildProcessWithoutNullStreams {
@@ -150,6 +212,10 @@ export class ActionRunner implements OnModuleDestroy {
       }
       const waiting = this._waiting.get(answer.id);
       if (!waiting) return;
+      if (answer.call) {
+        void this._answerCall(child, answer.id, waiting, answer.call);
+        return;
+      }
       this._waiting.delete(answer.id);
       clearTimeout(waiting.timer);
       waiting.resolve(answer);

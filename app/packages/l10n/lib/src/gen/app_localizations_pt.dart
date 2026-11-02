@@ -239,5 +239,44 @@ class AppLocalizationsPt extends AppLocalizations {
   String get componentButton => 'Botão';
 
   @override
+  String get componentCard => 'Cartão';
+
+  @override
+  String get componentDivider => 'Divisória';
+
+  @override
+  String get componentTabs => 'Abas';
+
+  @override
+  String get componentPages => 'Páginas';
+
+  @override
+  String get componentModal => 'Folha';
+
+  @override
+  String get componentIcon => 'Ícone';
+
+  @override
+  String get componentImage => 'Imagem';
+
+  @override
+  String get componentBadge => 'Selo';
+
+  @override
+  String get componentMessage => 'Mensagem';
+
+  @override
+  String get componentSwitch => 'Interruptor';
+
+  @override
+  String get componentChoicePicker => 'Escolha';
+
+  @override
+  String get componentSlider => 'Controle deslizante';
+
+  @override
+  String get componentDateTimeInput => 'Data e hora';
+
+  @override
   String get componentUnknown => 'Componente';
 }

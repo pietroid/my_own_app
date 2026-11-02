@@ -75,6 +75,61 @@ Future<List> run(Map input, Map event, Function call) async {
     ]);
   });
 
+  test('reads a platform call that answers an object, not a patch', () async {
+    final patch = await _run(
+      '''
+Future<List> run(Map input, Map event, Function call) async {
+  final apps = (await call('apps.list', {})) as List;
+  final first = apps[0] as Map;
+  final made = (await call('apps.create', {'prompt': 'x'})) as Map;
+  return [
+    {'op': 'replace', 'path': '/apps', 'value': apps},
+    {'op': 'replace', 'path': '/first', 'value': first['name']},
+    {'op': 'replace', 'path': '/made', 'value': made['id']},
+  ];
+}
+''',
+      call: (name, _) async => switch (name) {
+        'apps.list' => jsonEncode([
+          {'id': 'a', 'name': 'Tarefas'},
+        ]),
+        _ => jsonEncode({'id': 'b'}),
+      },
+    );
+    expect(patch, [
+      {
+        'op': 'replace',
+        'path': '/apps',
+        'value': [
+          {'id': 'a', 'name': 'Tarefas'},
+        ],
+      },
+      {'op': 'replace', 'path': '/first', 'value': 'Tarefas'},
+      {'op': 'replace', 'path': '/made', 'value': 'b'},
+    ]);
+  });
+
+  test('calls with a map built from data, not only a literal', () async {
+    final sent = <String>[];
+    await _run(
+      '''
+Future<List> run(Map input, Map event, Function call) async {
+  final m = {'id': event['id']};
+  await call('a', m);
+  await call('b', {'id': input['/x']});
+  return [];
+}
+''',
+      input: {'/x': 2},
+      event: {'id': 'x'},
+      call: (name, event) async {
+        sent.add('$name $event');
+        return '[]';
+      },
+    );
+    expect(sent, ['a {"id":"x"}', 'b {"id":2}']);
+  });
+
   test("a failed server call fails it with the server's error", () async {
     final error = StateError('409');
     await expectLater(

@@ -13,6 +13,7 @@ import {
   InvalidBundleError,
   parseBundle,
 } from './bundle';
+import { dropReferences } from './catalog';
 
 /**
  * Changing an app the person already has, by tools, one piece at a time.
@@ -39,6 +40,8 @@ export interface Changes {
   data: boolean;
   /** When the version brought an earlier one back: that one's number. */
   restoredFrom?: number;
+  /** When the version switched what the app is made for: the new form. */
+  form?: 'mobile' | 'web';
 }
 
 /** What [after] changed against [before]. */
@@ -164,14 +167,8 @@ export class EditDraft {
     const ids = new Set(value);
     if (ids.has('root')) throw new Error('root cannot be removed');
     this.draft.ui = this.draft.ui.filter((c) => !ids.has(c.id));
-    // A parent that listed a removed child stops listing it.
-    for (const component of this.draft.ui) {
-      if (Array.isArray(component.children)) {
-        component.children = component.children.filter(
-          (id) => !ids.has(id as string),
-        );
-      }
-    }
+    // A parent that drew a removed child stops drawing it.
+    for (const component of this.draft.ui) dropReferences(component, ids);
     return `ok: removed ${[...ids].join(', ')}`;
   }
 
@@ -204,7 +201,7 @@ export class EditDraft {
     const { name, on, input, code } = args;
     if (typeof name !== 'string') throw new Error('name must be a string');
     const def: ActionDef = {
-      ...(on === 'client' ? { on: 'client' as const } : {}),
+      ...(on === 'client' || on === 'platform' ? { on } : {}),
       input: input as string[],
       code: code as string,
     };
@@ -384,7 +381,7 @@ export const EDIT_TOOLS: ToolDefinition[] = [
         type: 'object',
         properties: {
           name: { type: 'string' },
-          on: { type: 'string', enum: ['server', 'client'] },
+          on: { type: 'string', enum: ['server', 'client', 'platform'] },
           input: { type: 'array', items: { type: 'string' } },
           code: {
             type: 'string',

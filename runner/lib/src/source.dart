@@ -14,7 +14,8 @@ const entryFunction = 'entry__';
 /// that is not a `Future`. Values cross into and out
 /// of the interpreter as JSON strings, so nothing but plain data does: the
 /// entry point decodes them, and `call` is a closure here that turns the
-/// host's string answers back into data.
+/// host's string answers back into data: a patch from a saved action, or
+/// whatever a platform call answers (`apps.list`: a list of apps).
 String wrapAction(String code) =>
     '''
 import 'dart:convert';
@@ -22,9 +23,12 @@ import 'dart:convert';
 $code
 
 Future<String> $entryFunction(String input, String event, Function host) async {
-  Future<List> call(String name, Map event) async {
-    final String answer = await host(name, jsonEncode(event));
-    return jsonDecode(answer) as List;
+  // Untyped on purpose: dart_eval checks a closure's argument types against
+  // the declared ones at the call, and a map built from data (`{'id':
+  // event['id']}`) is not seen as a `Map`.
+  Future call(dynamic name, dynamic event) async {
+    final String answer = await host(name as String, jsonEncode(event));
+    return jsonDecode(answer);
   }
 
   final out = await run(jsonDecode(input) as Map, jsonDecode(event) as Map, call);

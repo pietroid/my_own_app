@@ -1,6 +1,7 @@
 import 'package:app_ui/app_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:l10n/l10n.dart';
+import 'package:my_own_app/apps/app_renderer.dart';
 import 'package:my_own_app/apps/apps_repository.dart';
 import 'package:my_own_app/apps/studio_cubit.dart';
 
@@ -13,19 +14,25 @@ String componentName(AppLocalizations l10n, String? type) => switch (type) {
   'TextField' => l10n.componentTextField,
   'CheckBox' => l10n.componentCheckBox,
   'Button' => l10n.componentButton,
+  'Card' => l10n.componentCard,
+  'Divider' => l10n.componentDivider,
+  'Tabs' => l10n.componentTabs,
+  'Pages' => l10n.componentPages,
+  'Modal' => l10n.componentModal,
+  'Icon' => l10n.componentIcon,
+  'Image' => l10n.componentImage,
+  'Badge' => l10n.componentBadge,
+  'Message' => l10n.componentMessage,
+  'Switch' => l10n.componentSwitch,
+  'ChoicePicker' => l10n.componentChoicePicker,
+  'Slider' => l10n.componentSlider,
+  'DateTimeInput' => l10n.componentDateTimeInput,
   _ => l10n.componentUnknown,
 };
 
 /// The icon of a component type.
-AppIconData componentIcon(String? type) => switch (type) {
-  'Column' => AppIcons.componentColumn,
-  'Row' => AppIcons.componentRow,
-  'List' => AppIcons.componentList,
-  'Text' => AppIcons.componentText,
-  'TextField' => AppIcons.componentField,
-  'CheckBox' => AppIcons.componentCheck,
-  _ => AppIcons.componentButton,
-};
+AppIconData componentIcon(String? type) =>
+    AppIcons.components[type] ?? AppIcons.componentButton;
 
 /// {@template studio_inspector}
 /// The app's components as a tree, the picked one highlighted; under it,
@@ -124,6 +131,9 @@ class StudioInspector extends StatelessWidget {
         }
       } else if (children is Map) {
         walk('${children['componentId']}', depth + 1, perItem: true);
+      }
+      for (final ref in references(c)) {
+        walk(ref, depth + 1);
       }
     }
 

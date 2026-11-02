@@ -93,4 +93,28 @@ abstract final class AppSpacing {
 
   /// The width of a property's name in the inspector's menu.
   static const propertyNameWidth = 72.0;
+
+  /// A built app's avatar image: a circle this wide.
+  static const imageAvatar = 40.0;
+
+  /// A built app's small feature image.
+  static const imageSmall = 64.0;
+
+  /// A built app's medium feature image.
+  static const imageMedium = 120.0;
+
+  /// A built app's large feature image.
+  static const imageLarge = 200.0;
+
+  /// The height of a built app's header image, as wide as the screen.
+  static const imageHeader = 160.0;
+
+  /// The width of each item in a built app's horizontal list.
+  static const stripItemWidth = 200.0;
+
+  /// How much of the width a chat bubble may take.
+  static const messageWidthFactor = 0.8;
+
+  /// The share of the screen a built app's sheet (Modal) may cover.
+  static const sheetHeightFactor = 0.85;
 }

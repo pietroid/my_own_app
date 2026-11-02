@@ -85,7 +85,7 @@ void main() {
     tester,
   ) async {
     final fired = <(String, Map<String, Object?>)>[];
-    final edits = <(String, String)>[];
+    final edits = <(String, Object?)>[];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -116,7 +116,12 @@ void main() {
 
     await tester.tap(find.text('Leite'));
     expect(fired.last.$1, 'toggle_todo');
-    expect(fired.last.$2, {'done': true, 'itemPath': '/todos/0', 'index': 0});
+    expect(fired.last.$2, {
+      'done': true,
+      'itemPath': '/todos/0',
+      'index': 0,
+      'value': false,
+    });
   });
 
   testWidgets('picks a component instead of running it, while inspecting', (
