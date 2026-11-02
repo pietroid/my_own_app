@@ -7,7 +7,9 @@
 #   Changed means against HEAD, untracked files included: the server if
 #   anything under server/ changed, the app's own tests if app/lib or
 #   app/test changed, and each app package with tests that changed (a change
-#   to app_ui or l10n tests everything). --all checks everything, as CI does.
+#   to app_ui or l10n tests everything). The action runner (runner/) is
+#   both sides' interpreter: a change to it checks it, the server and the
+#   app. --all checks everything, as CI does.
 set -uo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 all=0; logs="${TMPDIR:-/tmp}/my-own-app-check"
@@ -23,7 +25,9 @@ mkdir -p "$logs"; rm -f "$logs"/*.log
 
 changed=$(cd "$root" && { git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
 server=0; packages=""
-if [ $all = 1 ] || grep -q '^server/' <<<"$changed"; then server=1; fi
+runner=0
+if [ $all = 1 ] || grep -q '^runner/' <<<"$changed"; then runner=1; fi
+if [ $all = 1 ] || [ $runner = 1 ] || grep -q '^server/' <<<"$changed"; then server=1; fi
 for dir in "$root"/app/packages/*/; do
   name=$(basename "$dir")
   [ -d "$dir/test" ] || continue
@@ -32,8 +36,8 @@ done
 tool=0
 if [ $all = 1 ] || grep -q '^\.tool/' <<<"$changed"; then tool=1; fi
 app_changed=0; app_tests=0
-if [ $all = 1 ] || grep -q '^app/' <<<"$changed"; then app_changed=1; fi
-if [ $all = 1 ] || grep -qE '^app/(lib|test|packages/(app_ui|l10n))/' <<<"$changed"; then app_tests=1; fi
+if [ $all = 1 ] || [ $runner = 1 ] || grep -q '^app/' <<<"$changed"; then app_changed=1; fi
+if [ $all = 1 ] || [ $runner = 1 ] || grep -qE '^app/(lib|test|packages/(app_ui|l10n))/' <<<"$changed"; then app_tests=1; fi
 
 failed=0
 # step <name> <dir> <command...>: runs it, logs it, prints ✓/✗ and the time.
@@ -61,6 +65,12 @@ if [ $server = 1 ]; then
   server_pid=$!
 fi
 
+# The action runner, on the VM and in Chrome (the web runs it compiled to JS).
+if [ $runner = 1 ]; then
+  step runner-analyze "$root/runner" dart analyze
+  step runner-test "$root/runner" sh -c 'dart test -r failures-only && dart test -p chrome -r failures-only'
+fi
+
 # The internal tools' own tests (node:test, no install).
 if [ $tool = 1 ]; then
   step tool-test "$root" sh -c 'node --test .tool/*.test.mjs'
@@ -80,5 +90,5 @@ if [ $server = 1 ]; then
   wait $server_pid || failed=1
   cat "$logs/server.out"
 fi
-[ $server = 0 ] && [ $app_changed = 0 ] && [ $tool = 0 ] && echo "nothing changed (pass --all to check everything)"
+[ $server = 0 ] && [ $app_changed = 0 ] && [ $tool = 0 ] && [ $runner = 0 ] && echo "nothing changed (pass --all to check everything)"
 exit $failed

@@ -19,20 +19,21 @@ class AppSummary extends Equatable {
 }
 
 /// {@template client_action}
-/// An action the device runs itself: what it reads, and its code.
+/// An action the device runs itself: what it reads, and its bytecode.
 /// {@endtemplate}
 class ClientAction extends Equatable {
   /// {@macro client_action}
-  const ClientAction({required this.input, required this.code});
+  const ClientAction({required this.input, required this.evc});
 
   /// The JSON Pointers it reads.
   final List<String> input;
 
-  /// `async function run(input, event, call) { ... }`
-  final String code;
+  /// Its Dart, `Future<List> run(Map input, Map event, Function call)`,
+  /// compiled by the server into dart_eval bytecode, base64.
+  final String evc;
 
   @override
-  List<Object?> get props => [input, code];
+  List<Object?> get props => [input, evc];
 }
 
 /// {@template app_snapshot}
@@ -68,7 +69,7 @@ class AppSnapshot extends Equatable {
                 in (value as Map<String, dynamic>)['input'] as List<dynamic>)
               '$path',
           ],
-          code: value['code'] as String,
+          evc: value['evc'] as String,
         ),
     },
   );

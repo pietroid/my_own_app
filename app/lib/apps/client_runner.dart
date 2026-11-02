@@ -1,6 +1,6 @@
-import 'package:my_own_app/apps/client_runner_stub.dart'
-    if (dart.library.js_interop) 'package:my_own_app/apps/client_runner_web.dart'
-    as platform;
+import 'dart:convert';
+
+import 'package:action_runner/run.dart';
 
 /// Runs a server action from inside a client one: answers with the JSON
 /// Patch the server kept, already applied to the app's data.
@@ -8,8 +8,8 @@ typedef ServerCall =
     Future<List<dynamic>> Function(String action, Map<String, Object?> event);
 
 /// {@template client_action_failed}
-/// A client action that did not compile, threw, ran too long, or cannot run
-/// on this device.
+/// A client action that threw, ran too long, or whose bytecode this app
+/// cannot read (an app older than the server).
 /// {@endtemplate}
 class ClientActionFailed implements Exception {
   /// {@macro client_action_failed}
@@ -23,30 +23,56 @@ class ClientActionFailed implements Exception {
 }
 
 /// {@template client_runner}
-/// Runs a client action, `async function run(input, event, call)`, on the
-/// device, and answers with the JSON Patch it returned.
+/// Runs a client action on the device, and answers with the JSON Patch it
+/// returned.
 ///
-/// On the web it runs in a Worker of its own with no network; `call` is the
-/// one way out, and it reaches only the app's server actions. On iOS and
-/// Android client actions do not run yet: they fail.
+/// The action is Dart the server compiled into dart_eval bytecode, run by
+/// the same interpreter on the web, iOS and Android (`runner/`, the one the
+/// server runs too). It gets no files, network or processes; `call` is its
+/// one way out, and it reaches only the app's server actions. It runs on
+/// this isolate within a step budget, so a loop that never ends stops
+/// instead of freezing the screen.
 /// {@endtemplate}
-// One seam with two platforms behind it, and a fake in tests.
+// One seam, and a fake in tests.
+// ignore: one_member_abstracts
 abstract interface class ClientRunner {
   /// {@macro client_runner}
-  factory ClientRunner() => platform.createClientRunner();
+  factory ClientRunner() => const _EvalRunner();
 
-  /// Runs [code] with [input] (keyed by pointer) and [event]; [call] runs a
-  /// server action on its behalf.
+  /// Runs [evc] (base64) with [input] (keyed by pointer) and [event];
+  /// [call] runs a server action on its behalf.
   Future<List<dynamic>> run({
-    required String code,
+    required String evc,
     required Map<String, Object?> input,
     required Map<String, Object?> event,
     required ServerCall call,
   });
+}
 
-  /// Gets the next run ready ahead of time, so a tap does not wait for it.
-  void warm();
+class _EvalRunner implements ClientRunner {
+  const _EvalRunner();
 
-  /// Lets go of what [warm] got ready; nothing runs after.
-  void close();
+  @override
+  Future<List<dynamic>> run({
+    required String evc,
+    required Map<String, Object?> input,
+    required Map<String, Object?> event,
+    required ServerCall call,
+  }) async {
+    try {
+      final patch = await runAction(
+        base64Decode(evc),
+        input: jsonEncode(input),
+        event: jsonEncode(event),
+        call: (action, event) async => jsonEncode(
+          await call(action, jsonDecode(event) as Map<String, Object?>),
+        ),
+      );
+      return jsonDecode(patch) as List<dynamic>;
+    } on ActionRunError catch (error) {
+      throw ClientActionFailed(error.message);
+    } on FormatException catch (error) {
+      throw ClientActionFailed('bad bytecode: ${error.message}');
+    }
+  }
 }

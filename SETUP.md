@@ -55,6 +55,10 @@ flutter run -d chrome --web-port 5173 --dart-define-from-file env/dev.json
 flutter run --flavor dev --dart-define-from-file env/dev.json   # phone/simulator
 ```
 
+The server runs the apps' actions in a Dart process (`runner/`), which
+`start:local` and `npm test` compile on first use (a few seconds), so Dart
+must be on the `PATH`; Flutter's is enough.
+
 On the web the dev server must run on **5173**: it is the origin the server
 trusts (`TRUSTED_ORIGINS`) and Google redirects back to. On a physical
 phone, `API_BASE_URL` must be your machine's LAN address
@@ -78,6 +82,14 @@ the ports and adds the tunnel's hostname (`scripts/cloudflare_add_domain.sh`):
 ```bash
 scp scripts/pi_setup.sh scripts/cloudflare_add_domain.sh server.env focus:
 ssh -t focus ./pi_setup.sh <app> <web port> <backend port> <your-domain> server.env
+```
+
+Apps built before actions were Dart have JavaScript actions the server can
+no longer run. Once, after that deploy, rebuild them from their prompts (one
+model call each; an app whose top-level data keys survive keeps its data):
+
+```bash
+ssh focus docker exec my-own-app-backend node dist/apps/rebuild.js
 ```
 
 To roll back, set `APP_TAG=<commit sha>` (one of the five kept) in the

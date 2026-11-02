@@ -8,6 +8,8 @@ environment:
   flutter: ^3.44.0
 
 dependencies:
+  action_runner:
+    path: ../runner
   analytics:
     path: packages/analytics
   api_client:
@@ -30,7 +32,7 @@ dependencies:
   web: ^1.1.1
 
 dev_dependencies:
-  bloc_lint: ^0.4.1
+  bloc_lint: ^0.3.7
   bloc_test: ^10.0.0
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.8

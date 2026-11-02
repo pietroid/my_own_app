@@ -6,13 +6,13 @@ import 'package:my_own_app/apps/client_runner.dart';
 
 class _MockRepository extends Mock implements AppsRepository {}
 
-/// Stands in for the Worker: does what the to-do's client `add` does.
+/// Stands in for the interpreter: does what the to-do's client `add` does.
 class _FakeRunner implements ClientRunner {
   Map<String, Object?>? input;
 
   @override
   Future<List<dynamic>> run({
-    required String code,
+    required String evc,
     required Map<String, Object?> input,
     required Map<String, Object?> event,
     required ServerCall call,
@@ -23,12 +23,6 @@ class _FakeRunner implements ClientRunner {
       {'op': 'replace', 'path': '/draft', 'value': ''},
     ];
   }
-
-  @override
-  void warm() {}
-
-  @override
-  void close() {}
 }
 
 const _app = AppSnapshot(
@@ -37,7 +31,7 @@ const _app = AppSnapshot(
   ui: [],
   data: {'draft': '', 'todos': <Object?>[]},
   clientActions: {
-    'add': ClientAction(input: ['/draft'], code: 'async function run() {}'),
+    'add': ClientAction(input: ['/draft'], evc: 'AAAA'),
   },
 );
 

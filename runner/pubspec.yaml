@@ -1,0 +1,15 @@
+name: action_runner
+description: Compiles and runs an app's actions (Dart, through dart_eval), on the server and in the app.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+
+dependencies:
+  dart_eval:
+    path: third_party/dart_eval
+
+dev_dependencies:
+  test: ^1.25.0
+  very_good_analysis: ^10.3.0

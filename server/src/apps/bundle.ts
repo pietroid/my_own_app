@@ -6,11 +6,12 @@
  *   by JSON Pointer (`{ "path": "/todos" }`) and name actions; they hold no
  *   values and no code.
  * - `data`: one JSON document, the app's whole state.
- * - `actions`: small JS functions, `function run(input, event)`, that are
- *   given only the paths they declare and answer with a JSON Patch. A
- *   server action (the default) runs here and its patch is kept; a client
- *   action runs on the device, may `await call(name, event)` a server one,
- *   and its own patch changes only what is on screen.
+ * - `actions`: small Dart functions, `Future<List> run(Map input, Map
+ *   event, Function call) async`, given only the paths they declare and
+ *   answering with a JSON Patch, compiled once into dart_eval bytecode
+ *   (`ActionRunner`). A server action (the default) runs here and its patch
+ *   is kept; a client action runs on the device, may `await call(name,
+ *   event)` a server one, and its own patch changes only what is on screen.
  */
 export interface Bundle {
   name: string;
@@ -24,8 +25,12 @@ export interface ActionDef {
   on?: 'server' | 'client';
   /** The JSON Pointers the action reads; `run` gets them keyed by path. */
   input: string[];
-  /** `function run(input, event) { return [ ...JSON Patch ] }` */
+  /** `Future<List> run(Map input, Map event, Function call) async { ... }` */
   code: string;
+  /** [code] compiled, base64: what runs, here and on the device. */
+  evc?: string;
+  /** The runner that compiled [evc]; another one recompiles it. */
+  version?: string;
 }
 
 export type Component = { id: string; component: string } & Record<
@@ -133,7 +138,9 @@ export function parseBundle(value: unknown): Bundle {
       fail(`${actionName}: on must be "server" or "client"`);
     }
     if (typeof action.code !== 'string' || !action.code.includes('run')) {
-      fail(`${actionName}: code must define function run(input, event)`);
+      fail(
+        `${actionName}: code must define Future<List> run(Map input, Map event, Function call) async`,
+      );
     }
   }
 
@@ -141,7 +148,13 @@ export function parseBundle(value: unknown): Bundle {
     name: name!.trim(),
     ui: ui as Component[],
     data: data!,
-    actions: actions!,
+    // Only what the model may write: the bytecode is ours to add.
+    actions: Object.fromEntries(
+      Object.entries(actions!).map(([name, def]) => {
+        const { on, input, code } = def;
+        return [name, on === undefined ? { input, code } : { on, input, code }];
+      }),
+    ),
   };
 }
 

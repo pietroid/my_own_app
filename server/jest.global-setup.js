@@ -7,4 +7,11 @@
  */
 module.exports = () => {
   process.env.TZ = 'America/Sao_Paulo';
+  // The actions' specs run the real action runner (../runner), built here
+  // once when its sources changed.
+  require('node:child_process').execFileSync(
+    'node',
+    [require('node:path').join(__dirname, 'scripts/build-runner.mjs')],
+    { stdio: 'inherit' },
+  );
 };

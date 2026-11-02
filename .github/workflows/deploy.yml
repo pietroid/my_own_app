@@ -26,20 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: server/.nvmrc
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
-      - name: Server tests
-        working-directory: server
-        run: |
-          npm ci
-          npx eslint "src/**/*.ts"
-          npx tsc --noEmit -p tsconfig.json
-          npm test
-
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -47,6 +33,29 @@ jobs:
           # the one the code was written against. Bump both together.
           flutter-version: 3.44.1
           cache: true
+
+      - name: Action runner tests
+        working-directory: runner
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+          dart test -p chrome
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: server/.nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # Its specs run the real action runner, which they build with Dart.
+      - name: Server tests
+        working-directory: server
+        run: |
+          npm ci
+          npx eslint "src/**/*.ts"
+          npx tsc --noEmit -p tsconfig.json
+          npm test
 
       - name: App analysis and tests
         working-directory: app
@@ -93,6 +102,7 @@ jobs:
         with:
           context: ./server
           file: ./server/Dockerfile
+          build-contexts: runner=./runner
           platforms: linux/arm64
           push: true
           # No provenance manifests: they show up as extra untagged versions

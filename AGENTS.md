@@ -46,10 +46,12 @@ app/
     app_ui/             the design system: AppBrand, tokens, theme, widgets
     auth/               Better Auth client: Google sign-in, token store
     l10n/               every user-facing string (pt-BR)
+runner/                 the actions' interpreter, Dart: compile (server), run (both);
+                        third_party/dart_eval, vendored with a step budget
 server/
   src/
     analytics/          PostHog: the provider, the route → event table
-    apps/               apps as data: bundle rules, the action sandbox, routes
+    apps/               apps as data: bundle rules, the action runner process, routes
     assistant/          OpenRouter client, the assistant's routes
     auth/               Better Auth instance + SessionGuard
     db/                 Drizzle schema + pool + boot-time migrations
@@ -116,8 +118,9 @@ once, and from then on the app runs without the model. An app is a stored
 bundle (`generated_app`): `ui`, a flat list of components in our own subset
 of A2UI (Column, Row, List, Text, TextField, CheckBox, Button; the one with
 id `root` is the screen), bound to `data` by JSON Pointer; `data`, one JSON
-document; and `actions`, `function run(input, event)` in JS, given only the
-paths it declares and answering with a JSON Patch. An action runs `on`
+document; and `actions`, `Future<List> run(Map input, Map event, Function
+call) async` in **Dart**, given only the paths it declares and answering
+with a JSON Patch. An action runs `on`
 `"server"` (the default: its patch is kept) or `"client"` (on the device,
 instantly; its patch only changes the screen and is not kept). A client
 action may `await call(name, event)` a server action: the app posts it to
@@ -126,19 +129,30 @@ the API, applies the kept patch, and hands it back.
 - `POST /api/apps { prompt }` is one forced `create_app` tool call (and one
   retry with the error), checked by `parseBundle`. The prompt is
   `BUILD_PROMPT` in `server/src/apps/apps.service.ts`.
-- `POST /api/apps/:id/actions/:name { event }` runs the action in
-  isolated-vm (32 MB, 50 ms), applies the patch under a `rev` check and
-  answers it as an AG-UI `STATE_DELTA`; the app applies the same patch.
-  It refuses a client action. isolated-vm needs `node --no-node-snapshot`
-  (in the scripts and the image).
-- `GET /api/apps/:id` sends the code of the client actions only
-  (`clientActions`); a server action's code never leaves the server.
-- On the web a client action runs in a Worker of its own
-  (`client_runner_web.dart`): started from a `data:` URL (opaque origin, so
-  no cookies), with the network APIs deleted before the code runs, 10 s at
-  most. On iOS and Android client actions fail for now (`client_runner_stub.dart`);
-  `flutter test --platform chrome test/apps/client_runner_web_test.dart`
-  tests the Worker.
+- **One interpreter, both sides:** `runner/` (`action_runner`) wraps a
+  vendored dart_eval 0.8.5 with a **step budget** (`runner/third_party/`,
+  every change marked `my_own_app:`). `compile.dart` turns an action into
+  bytecode (server only: it brings the analyzer); `run.dart` runs bytecode
+  with no files, network or processes, and stops it past 2M steps. The app
+  and the server must use the same copy: bytecode is not portable
+  (`runnerVersion`).
+- The server compiles every action when the app is built (a compile error
+  goes back to the model in the retry) and stores `evc` and `version` next
+  to `code`; bytecode an older runner wrote is recompiled when the app is
+  read. It runs them in **one Dart process** beside Nest (`ActionRunner`,
+  `server/src/apps/runner.ts`), spoken to in JSON lines, heap capped
+  (`ACTION_RUNNER_HEAP_MB`), restarted if it dies or hangs.
+- `POST /api/apps/:id/actions/:name { event }` runs the action there,
+  applies the patch under a `rev` check and answers it as an AG-UI
+  `STATE_DELTA`; the app applies the same patch. It refuses a client action.
+- `GET /api/apps/:id` sends the bytecode of the client actions only
+  (`clientActions`); a server action never leaves the server, and no
+  action's source does.
+- The app runs client actions with the same `run.dart`, on the web, iOS
+  and Android alike (`app/lib/apps/client_runner.dart`), on the main
+  isolate: the step budget is what keeps a runaway action from freezing it.
+- The whole contract, the runner's protocol and its limits:
+  [product/spec/actions.md](./product/spec/actions.md).
 - On a window at least `AppSpacing.phoneFrameBreakpoint` wide, the app runs
   inside `AppPhoneFrame`.
 - The app draws it with `AppRenderer` (`app/lib/apps/`). A component it
@@ -177,10 +191,15 @@ on, anything else is feedback. The skills it runs are `/create`,
 
 # Server
 cd server
+npm run runner:build    # the action runner (Dart); start:local and npm test do it too
 npm run db:local        # optional: in-memory Postgres on :5433
 npm run start:local     # watches; needs server/.env.local (see .env.example)
 npm test
 npm run db:generate     # after editing src/db/schema.ts; commit drizzle/
+npm run apps:rebuild    # after a build: rebuild apps whose actions were never compiled
+
+# Action runner (Dart, used by the server and the app)
+cd runner && dart test && dart test -p chrome
 
 # App
 cd app

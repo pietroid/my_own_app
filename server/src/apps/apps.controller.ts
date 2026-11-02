@@ -25,7 +25,7 @@ import {
   StateDelta,
 } from './apps.service';
 import { InvalidBundleError } from './bundle';
-import { ActionFailedError } from './sandbox';
+import { ActionFailedError } from './runner';
 
 /** How long a description of an app may be, in characters. */
 const MAX_PROMPT = 2000;
