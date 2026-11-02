@@ -118,4 +118,37 @@ void main() {
     expect(fired.last.$1, 'toggle_todo');
     expect(fired.last.$2, {'done': true, 'itemPath': '/todos/0', 'index': 0});
   });
+
+  testWidgets('picks a component instead of running it, while inspecting', (
+    tester,
+  ) async {
+    final fired = <String>[];
+    final picked = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppRenderer(
+            ui: _ui,
+            data: const {
+              'draft': '',
+              'todos': [
+                {'title': 'Leite', 'done': false},
+              ],
+            },
+            onAction: (name, _) => fired.add(name),
+            onEdit: (_, _) {},
+            onSelect: picked.add,
+            selectedId: 'add',
+          ),
+        ),
+      ),
+    );
+
+    // The leaf absorbs the tap itself, so the text is not hit: expected.
+    await tester.tap(find.text('Adicionar'), warnIfMissed: false);
+    await tester.tap(find.text('Leite'), warnIfMissed: false);
+    expect(picked, ['add', 'item']);
+    expect(fired, isEmpty);
+  });
 }

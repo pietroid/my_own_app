@@ -140,6 +140,11 @@ class AppRunCubit extends Cubit<AppRunState> {
     }
   }
 
+  /// The app as an edit left it: its new screen, actions and data.
+  void replace(AppSnapshot app) {
+    if (!isClosed) emit(AppRunState(app: app));
+  }
+
   /// What the person typed into a field: kept on the device until a button
   /// sends it.
   void edit(String path, String value) {

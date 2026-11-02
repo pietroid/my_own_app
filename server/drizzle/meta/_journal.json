@@ -15,6 +15,13 @@
       "when": 1793643766397,
       "tag": "0001_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793653447888,
+      "tag": "0002_app_versions",
+      "breakpoints": true
     }
   ]
 }

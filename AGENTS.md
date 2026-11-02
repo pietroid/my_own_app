@@ -39,7 +39,7 @@ app/
   brand/                icon, Android foreground and splash art (+ README)
   env/                  <flavor>.json defines (examples committed)
   tool/stamp_web.sh     puts the PostHog key in a web build
-  lib/                  app (router, AppBloc), home, assistant, apps (renderer)
+  lib/                  app (router, AppBloc), home, assistant, apps (renderer, studio)
   packages/
     analytics/          PostHog behind one seam (Analytics, NoAnalytics)
     api_client/         Dio + bearer token interceptor
@@ -51,7 +51,8 @@ runner/                 the actions' interpreter, Dart: compile (server), run (b
 server/
   src/
     analytics/          PostHog: the provider, the route → event table
-    apps/               apps as data: bundle rules, the action runner process, routes
+    apps/               apps as data: bundle rules, the action runner process, routes,
+                        edits by tools and versions (edit.ts)
     assistant/          OpenRouter client, the assistant's routes
     auth/               Better Auth instance + SessionGuard
     db/                 Drizzle schema + pool + boot-time migrations
@@ -162,6 +163,18 @@ only on the device, so a saved action reads it from the event (a button's
 - The app draws it with `AppRenderer` (`app/lib/apps/`). A component it
   does not know draws nothing; a new one goes in both `COMPONENTS` and the
   renderer, and in `BUILD_PROMPT`.
+
+### The studio: changing an app
+
+A built app opens beside the conversation that changes it (and, on a wide
+window, an inspector where any component can be picked and made the
+subject of a request). Every request is a **version** (`app_version`: the
+request, the reply, the app right after); any version can be looked at and
+brought back. `POST /api/apps/:id/messages` changes the app with **tools**
+(`server/src/apps/edit.ts`, `EDIT_PROMPT`): the model sees the screen and
+the data, but the actions only by name; it reads one with `read_action`
+and writes one with `set_action` only when its code must change, so only
+those are recompiled. Spec: [product/spec/studio.md](./product/spec/studio.md).
 
 ## The design system
 

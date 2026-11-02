@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -119,10 +120,45 @@ export const generatedApp = pgTable(
     data: jsonb('data').notNull(),
     actions: jsonb('actions').notNull(),
     rev: integer('rev').notNull().default(0),
+    /** The number of the [appVersion] the app is at now. */
+    version: integer('version').notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [index('generated_app_user_id_idx').on(table.userId)],
 );
 
-export const schema = { user, session, account, verification, generatedApp };
+/**
+ * One point of an app's history: what the person asked, what the model
+ * answered, and the app as it was right after (its screen, its actions and
+ * its data then). The conversation about an app is its versions, in order.
+ */
+export const appVersion = pgTable(
+  'app_version',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    appId: uuid('app_id')
+      .notNull()
+      .references(() => generatedApp.id, { onDelete: 'cascade' }),
+    n: integer('n').notNull(),
+    prompt: text('prompt').notNull(),
+    reply: text('reply').notNull().default(''),
+    name: text('name').notNull(),
+    ui: jsonb('ui').notNull(),
+    data: jsonb('data').notNull(),
+    actions: jsonb('actions').notNull(),
+    /** What this version changed: component ids and action names. */
+    changes: jsonb('changes').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [uniqueIndex('app_version_app_id_n_idx').on(table.appId, table.n)],
+);
+
+export const schema = {
+  user,
+  session,
+  account,
+  verification,
+  generatedApp,
+  appVersion,
+};

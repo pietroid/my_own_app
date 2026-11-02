@@ -226,6 +226,282 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Tentar de novo'**
   String get appsRetry;
+
+  /// No description provided for @studioChatTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Conversa'**
+  String get studioChatTitle;
+
+  /// No description provided for @studioChatHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Peça uma mudança no app'**
+  String get studioChatHint;
+
+  /// No description provided for @studioChatHintFocused.
+  ///
+  /// In pt, this message translates to:
+  /// **'O que mudar neste componente?'**
+  String get studioChatHintFocused;
+
+  /// No description provided for @studioSend.
+  ///
+  /// In pt, this message translates to:
+  /// **'Enviar'**
+  String get studioSend;
+
+  /// No description provided for @studioSending.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mudando o app…'**
+  String get studioSending;
+
+  /// No description provided for @studioSendFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não foi possível mudar o app. Tente de novo.'**
+  String get studioSendFailed;
+
+  /// No description provided for @studioHistoryFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não foi possível carregar a conversa.'**
+  String get studioHistoryFailed;
+
+  /// No description provided for @studioOpenChat.
+  ///
+  /// In pt, this message translates to:
+  /// **'Conversa'**
+  String get studioOpenChat;
+
+  /// No description provided for @studioFirstReply.
+  ///
+  /// In pt, this message translates to:
+  /// **'Pronto: o app está montado.'**
+  String get studioFirstReply;
+
+  /// No description provided for @studioNoChanges.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem mudanças no app'**
+  String get studioNoChanges;
+
+  /// A version of the app in its history.
+  ///
+  /// In pt, this message translates to:
+  /// **'Versão {n}'**
+  String studioVersion(int n);
+
+  /// No description provided for @studioCurrent.
+  ///
+  /// In pt, this message translates to:
+  /// **'atual'**
+  String get studioCurrent;
+
+  /// A version that brought an earlier one back.
+  ///
+  /// In pt, this message translates to:
+  /// **'Voltou à versão {n}'**
+  String studioRestored(int n);
+
+  /// How many components a version changed.
+  ///
+  /// In pt, this message translates to:
+  /// **'{count, plural, =1{1 componente} other{{count} componentes}}'**
+  String studioComponents(int count);
+
+  /// How many actions a version changed.
+  ///
+  /// In pt, this message translates to:
+  /// **'{count, plural, =1{1 ação} other{{count} ações}}'**
+  String studioActions(int count);
+
+  /// Above the phone, when an earlier version is shown.
+  ///
+  /// In pt, this message translates to:
+  /// **'Vendo a versão {n}'**
+  String studioViewing(int n);
+
+  /// No description provided for @studioViewingBody.
+  ///
+  /// In pt, this message translates to:
+  /// **'Só para ver: os toques não fazem nada.'**
+  String get studioViewingBody;
+
+  /// No description provided for @studioBackToCurrent.
+  ///
+  /// In pt, this message translates to:
+  /// **'Voltar à atual'**
+  String get studioBackToCurrent;
+
+  /// No description provided for @studioRestore.
+  ///
+  /// In pt, this message translates to:
+  /// **'Restaurar esta'**
+  String get studioRestore;
+
+  /// No description provided for @studioViewFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não foi possível abrir essa versão.'**
+  String get studioViewFailed;
+
+  /// No description provided for @studioSelect.
+  ///
+  /// In pt, this message translates to:
+  /// **'Selecionar componente'**
+  String get studioSelect;
+
+  /// No description provided for @studioSelectDone.
+  ///
+  /// In pt, this message translates to:
+  /// **'Usar o app'**
+  String get studioSelectDone;
+
+  /// No description provided for @studioTreeTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Componentes'**
+  String get studioTreeTitle;
+
+  /// No description provided for @studioNothingSelected.
+  ///
+  /// In pt, this message translates to:
+  /// **'Selecione um componente no app ou na árvore.'**
+  String get studioNothingSelected;
+
+  /// No description provided for @studioPerItem.
+  ///
+  /// In pt, this message translates to:
+  /// **'por item'**
+  String get studioPerItem;
+
+  /// No description provided for @studioId.
+  ///
+  /// In pt, this message translates to:
+  /// **'Id'**
+  String get studioId;
+
+  /// No description provided for @studioText.
+  ///
+  /// In pt, this message translates to:
+  /// **'Texto'**
+  String get studioText;
+
+  /// No description provided for @studioLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Rótulo'**
+  String get studioLabel;
+
+  /// No description provided for @studioValue.
+  ///
+  /// In pt, this message translates to:
+  /// **'Valor'**
+  String get studioValue;
+
+  /// No description provided for @studioItems.
+  ///
+  /// In pt, this message translates to:
+  /// **'Itens'**
+  String get studioItems;
+
+  /// No description provided for @studioChildren.
+  ///
+  /// In pt, this message translates to:
+  /// **'Filhos'**
+  String get studioChildren;
+
+  /// No description provided for @studioAction.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ação'**
+  String get studioAction;
+
+  /// No description provided for @studioSaved.
+  ///
+  /// In pt, this message translates to:
+  /// **'salva no servidor'**
+  String get studioSaved;
+
+  /// No description provided for @studioScreenOnly.
+  ///
+  /// In pt, this message translates to:
+  /// **'só na tela'**
+  String get studioScreenOnly;
+
+  /// No description provided for @studioReads.
+  ///
+  /// In pt, this message translates to:
+  /// **'Lê'**
+  String get studioReads;
+
+  /// No description provided for @studioAskChange.
+  ///
+  /// In pt, this message translates to:
+  /// **'Pedir mudança'**
+  String get studioAskChange;
+
+  /// The chip over the composer naming the selected component.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sobre: {component}'**
+  String studioFocus(String component);
+
+  /// No description provided for @studioClearFocus.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tirar o foco'**
+  String get studioClearFocus;
+
+  /// No description provided for @componentColumn.
+  ///
+  /// In pt, this message translates to:
+  /// **'Coluna'**
+  String get componentColumn;
+
+  /// No description provided for @componentRow.
+  ///
+  /// In pt, this message translates to:
+  /// **'Linha'**
+  String get componentRow;
+
+  /// No description provided for @componentList.
+  ///
+  /// In pt, this message translates to:
+  /// **'Lista'**
+  String get componentList;
+
+  /// No description provided for @componentText.
+  ///
+  /// In pt, this message translates to:
+  /// **'Texto'**
+  String get componentText;
+
+  /// No description provided for @componentTextField.
+  ///
+  /// In pt, this message translates to:
+  /// **'Campo'**
+  String get componentTextField;
+
+  /// No description provided for @componentCheckBox.
+  ///
+  /// In pt, this message translates to:
+  /// **'Caixa de seleção'**
+  String get componentCheckBox;
+
+  /// No description provided for @componentButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Botão'**
+  String get componentButton;
+
+  /// No description provided for @componentUnknown.
+  ///
+  /// In pt, this message translates to:
+  /// **'Componente'**
+  String get componentUnknown;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

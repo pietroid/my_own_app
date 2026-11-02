@@ -7,6 +7,7 @@ import {
   HttpCode,
   NotFoundException,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Post,
   ServiceUnavailableException,
@@ -22,7 +23,9 @@ import {
   AppNotFoundError,
   AppSnapshot,
   AppsService,
+  EditOutcome,
   StateDelta,
+  VersionSummary,
 } from './apps.service';
 import { InvalidBundleError } from './bundle';
 import { ActionFailedError } from './runner';
@@ -67,6 +70,63 @@ export class AppsController {
     return guard(() => this._apps.create(user.id, prompt));
   }
 
+  /** The app's conversation: its versions, oldest first. */
+  @Get(':id/versions')
+  history(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ current: number; versions: VersionSummary[] }> {
+    return guard(() => this._apps.history(user.id, id));
+  }
+
+  /** The app as it was at version [n]. */
+  @Get(':id/versions/:n')
+  version(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('n', ParseIntPipe) n: number,
+  ): Promise<AppSnapshot> {
+    return guard(() => this._apps.version(user.id, id, n));
+  }
+
+  /**
+   * One message about the app: the model changes it, and the change is a
+   * new version. `focus` is the id of the component the person selected.
+   */
+  @Post(':id/messages')
+  edit(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: { prompt?: unknown; focus?: unknown },
+  ): Promise<EditOutcome> {
+    const prompt = typeof dto?.prompt === 'string' ? dto.prompt.trim() : '';
+    if (prompt === '' || prompt.length > MAX_PROMPT) {
+      throw new BadRequestException('Diga o que mudar em poucas palavras.');
+    }
+    const focus = dto?.focus;
+    if (focus !== undefined && focus !== null && typeof focus !== 'string') {
+      throw new BadRequestException('Componente inválido.');
+    }
+    if (!this._apps.configured) {
+      throw new ServiceUnavailableException(
+        'O assistente ainda não está conectado a um modelo.',
+      );
+    }
+    return guard(() =>
+      this._apps.edit(user.id, id, prompt, focus ?? undefined),
+    );
+  }
+
+  /** Brings version [n] back, as a new version. */
+  @Post(':id/versions/:n/restore')
+  restore(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('n', ParseIntPipe) n: number,
+  ): Promise<EditOutcome> {
+    return guard(() => this._apps.restore(user.id, id, n));
+  }
+
   /** One tap: runs the action, answers with the patch it made. */
   @Post(':id/actions/:action')
   @HttpCode(200)
@@ -102,7 +162,7 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
     }
     if (error instanceof InvalidBundleError) {
       throw new UnprocessableEntityException(
-        'Não consegui montar esse app. Tente descrever de outro jeito.',
+        'Não consegui fazer isso. Tente descrever de outro jeito.',
       );
     }
     if (error instanceof ModelUnavailableError) {

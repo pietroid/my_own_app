@@ -173,6 +173,41 @@ class _FakeAppsRepository implements AppsRepository {
   Future<AppSnapshot> create(String prompt) async => _todo;
 
   @override
+  Future<AppHistory> history(String id) async => const AppHistory(
+    current: 2,
+    versions: [
+      AppVersion(n: 1, prompt: 'Uma lista de tarefas', reply: ''),
+      AppVersion(
+        n: 2,
+        prompt: 'Coloque um título no topo',
+        reply: 'Pronto: o título "Minhas tarefas" está no topo.',
+        changes: AppChanges(components: ['root', 'title']),
+      ),
+    ],
+  );
+
+  @override
+  Future<AppSnapshot> version(String id, int n) async => _todo;
+
+  @override
+  Future<AppEdit> send(String id, String prompt, {String? focus}) async =>
+      AppEdit(
+        version: AppVersion(n: 3, prompt: prompt, reply: 'Feito.'),
+        app: _todo,
+      );
+
+  @override
+  Future<AppEdit> restore(String id, int n) async => AppEdit(
+    version: AppVersion(
+      n: 3,
+      prompt: '',
+      reply: '',
+      changes: AppChanges(restoredFrom: n),
+    ),
+    app: _todo,
+  );
+
+  @override
   Future<List<dynamic>> act(
     String id,
     String action,

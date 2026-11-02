@@ -68,4 +68,29 @@ abstract final class AppSpacing {
   /// From this width up, a built app runs inside a drawn phone
   /// (`AppPhoneFrame`) instead of filling the window.
   static const phoneFrameBreakpoint = 720.0;
+
+  /// From this width up, a built app opens in the studio: the conversation,
+  /// the phone and the inspector side by side.
+  static const studioBreakpoint = 1100.0;
+
+  /// The width of the studio's conversation panel.
+  static const studioChatWidth = 360.0;
+
+  /// The width of the studio's inspector panel.
+  static const studioInspectorWidth = 300.0;
+
+  /// How far each level of the component tree is indented.
+  static const treeIndent = 14.0;
+
+  /// The outline drawn around a selected component.
+  static const selectionOutline = 2.0;
+
+  /// An icon beside a line of label text.
+  static const iconSmall = 16.0;
+
+  /// The height of the inspector's menu for the picked component.
+  static const studioMenuHeight = 280.0;
+
+  /// The width of a property's name in the inspector's menu.
+  static const propertyNameWidth = 72.0;
 }

@@ -32,5 +32,99 @@
   "appsCreateFailed": "Não foi possível criar o app. Tente de novo.",
   "appsLoadFailed": "Não foi possível abrir o app.",
   "appsActionFailed": "Essa ação falhou.",
-  "appsRetry": "Tentar de novo"
+  "appsRetry": "Tentar de novo",
+  "studioChatTitle": "Conversa",
+  "studioChatHint": "Peça uma mudança no app",
+  "studioChatHintFocused": "O que mudar neste componente?",
+  "studioSend": "Enviar",
+  "studioSending": "Mudando o app…",
+  "studioSendFailed": "Não foi possível mudar o app. Tente de novo.",
+  "studioHistoryFailed": "Não foi possível carregar a conversa.",
+  "studioOpenChat": "Conversa",
+  "studioFirstReply": "Pronto: o app está montado.",
+  "studioNoChanges": "Sem mudanças no app",
+  "studioVersion": "Versão {n}",
+  "@studioVersion": {
+    "description": "A version of the app in its history.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "studioCurrent": "atual",
+  "studioRestored": "Voltou à versão {n}",
+  "@studioRestored": {
+    "description": "A version that brought an earlier one back.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "studioComponents": "{count, plural, =1{1 componente} other{{count} componentes}}",
+  "@studioComponents": {
+    "description": "How many components a version changed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studioActions": "{count, plural, =1{1 ação} other{{count} ações}}",
+  "@studioActions": {
+    "description": "How many actions a version changed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studioViewing": "Vendo a versão {n}",
+  "@studioViewing": {
+    "description": "Above the phone, when an earlier version is shown.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "studioViewingBody": "Só para ver: os toques não fazem nada.",
+  "studioBackToCurrent": "Voltar à atual",
+  "studioRestore": "Restaurar esta",
+  "studioViewFailed": "Não foi possível abrir essa versão.",
+  "studioSelect": "Selecionar componente",
+  "studioSelectDone": "Usar o app",
+  "studioTreeTitle": "Componentes",
+  "studioNothingSelected": "Selecione um componente no app ou na árvore.",
+  "studioPerItem": "por item",
+  "studioId": "Id",
+  "studioText": "Texto",
+  "studioLabel": "Rótulo",
+  "studioValue": "Valor",
+  "studioItems": "Itens",
+  "studioChildren": "Filhos",
+  "studioAction": "Ação",
+  "studioSaved": "salva no servidor",
+  "studioScreenOnly": "só na tela",
+  "studioReads": "Lê",
+  "studioAskChange": "Pedir mudança",
+  "studioFocus": "Sobre: {component}",
+  "@studioFocus": {
+    "description": "The chip over the composer naming the selected component.",
+    "placeholders": {
+      "component": {
+        "type": "String"
+      }
+    }
+  },
+  "studioClearFocus": "Tirar o foco",
+  "componentColumn": "Coluna",
+  "componentRow": "Linha",
+  "componentList": "Lista",
+  "componentText": "Texto",
+  "componentTextField": "Campo",
+  "componentCheckBox": "Caixa de seleção",
+  "componentButton": "Botão",
+  "componentUnknown": "Componente"
 }

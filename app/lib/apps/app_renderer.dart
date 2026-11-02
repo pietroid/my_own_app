@@ -12,6 +12,10 @@ typedef AppActionCallback =
 /// path without a leading `/` is relative to the item, and every event fired
 /// there carries `itemPath` and `index`. A component the renderer does not
 /// know draws nothing.
+///
+/// With [onSelect], the screen is being inspected rather than used: a tap
+/// picks the component under it (the innermost one) instead of running
+/// anything, and every copy of [selectedId] is outlined.
 /// {@endtemplate}
 class AppRenderer extends StatelessWidget {
   /// {@macro app_renderer}
@@ -20,6 +24,8 @@ class AppRenderer extends StatelessWidget {
     required this.data,
     required this.onAction,
     required this.onEdit,
+    this.onSelect,
+    this.selectedId,
     super.key,
   }) : _components = {
          for (final component in ui) component['id'] as String: component,
@@ -34,6 +40,12 @@ class AppRenderer extends StatelessWidget {
   /// Typing into a field: the absolute path, and the text.
   final void Function(String path, String value) onEdit;
 
+  /// Picks a component by id; when set, taps select instead of acting.
+  final ValueChanged<String>? onSelect;
+
+  /// The component picked, outlined wherever it is drawn.
+  final String? selectedId;
+
   final Map<String, Map<String, dynamic>> _components;
 
   @override
@@ -46,6 +58,24 @@ class AppRenderer extends StatelessWidget {
     // A cycle or a missing id draws nothing rather than overflowing.
     if (c == null || depth > 32) return const SizedBox.shrink();
 
+    final drawn = _draw(c, scope, depth);
+    final select = onSelect;
+    if (select == null) return drawn;
+    // A container takes the taps between its children; a leaf takes all
+    // of its own, so a button is picked, not pressed.
+    final leaf = !_containers.contains(c['component']);
+    Widget wrap(Widget child) => _Selectable(
+      selected: id == selectedId,
+      absorb: leaf,
+      onTap: () => select(id),
+      child: child,
+    );
+    return drawn is _Fixed ? _Fixed(wrap(drawn.child)) : wrap(drawn);
+  }
+
+  static const _containers = {'Column', 'Row', 'List'};
+
+  Widget _draw(Map<String, dynamic> c, _Scope scope, int depth) {
     return switch (c['component']) {
       'Column' || 'List' => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -153,6 +183,46 @@ class _Scope {
   String resolve(String path) {
     if (path.startsWith('/') || itemPath == null) return path;
     return path.isEmpty ? itemPath! : '$itemPath/$path';
+  }
+}
+
+/// A component that can be picked: outlined when it is.
+class _Selectable extends StatelessWidget {
+  const _Selectable({
+    required this.selected,
+    required this.absorb,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool selected;
+  final bool absorb;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          foregroundDecoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? AppColors.accent : AppColors.line,
+              width: selected
+                  ? AppSpacing.selectionOutline
+                  : AppSpacing.hairline,
+            ),
+            borderRadius: const BorderRadius.all(
+              Radius.circular(AppSpacing.chipRadius),
+            ),
+          ),
+          child: absorb ? AbsorbPointer(child: child) : child,
+        ),
+      ),
+    );
   }
 }
 
