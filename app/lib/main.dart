@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:my_own_app/app/app.dart';
+import 'package:my_own_app/apps/apps_repository.dart';
 import 'package:my_own_app/assistant/assistant.dart';
 import 'package:my_own_app/auth_token_provider.dart';
 import 'package:my_own_app/bootstrap.dart';
@@ -57,6 +58,9 @@ Future<void> main() async {
         RepositoryProvider<AuthRepository>(create: (_) => authRepository),
         RepositoryProvider<AssistantRepository>(
           create: (_) => AssistantRepository(apiClient: apiClient),
+        ),
+        RepositoryProvider<AppsRepository>(
+          create: (_) => AppsRepository(apiClient: apiClient),
         ),
       ],
       child: BlocProvider<AppBloc>(

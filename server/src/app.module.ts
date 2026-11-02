@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
+import { AppsModule } from './apps/apps.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { AuthModule } from './auth/auth.module';
 import { DbModule } from './db/db.module';
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
     AuthModule,
     AssistantModule,
+    AppsModule,
     UsersModule,
   ],
   controllers: [AppController],

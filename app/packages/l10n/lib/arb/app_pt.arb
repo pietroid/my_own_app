@@ -17,13 +17,20 @@
     }
   },
   "homeGreetingAnonymous": "Olá",
-  "homeEmptyTitle": "Tudo pronto",
-  "homeEmptyBody": "Esta tela está em branco. É aqui que o app começa.",
+  "homeEmptyTitle": "Nenhum app ainda",
+  "homeEmptyBody": "Descreva o app que você quer, e o assistente monta para você.",
   "homeSignOut": "Sair",
-  "assistantOpen": "Falar com o assistente",
   "assistantTitle": "Assistente",
   "assistantHint": "Pergunte qualquer coisa",
   "assistantSend": "Enviar",
   "assistantEmpty": "Como posso ajudar?",
-  "assistantFailed": "O assistente não respondeu. Tente de novo."
+  "assistantFailed": "O assistente não respondeu. Tente de novo.",
+  "homeAssistant": "Assistente",
+  "appsCreateHint": "Ex.: uma lista de tarefas",
+  "appsCreate": "Criar app",
+  "appsCreating": "Montando o seu app…",
+  "appsCreateFailed": "Não foi possível criar o app. Tente de novo.",
+  "appsLoadFailed": "Não foi possível abrir o app.",
+  "appsActionFailed": "Essa ação falhou.",
+  "appsRetry": "Tentar de novo"
 }

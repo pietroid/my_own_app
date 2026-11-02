@@ -23,6 +23,9 @@ class AppIcons {
   /// Leaves the account.
   static const signOut = AppIconData.phosphor(PhosphorIconsRegular.signOut);
 
+  /// Opens something, at the end of a row.
+  static const open = AppIconData.phosphor(PhosphorIconsRegular.caretRight);
+
   /// Closes a page or a sheet.
   static const close = AppIconData.phosphor(PhosphorIconsRegular.x);
 }

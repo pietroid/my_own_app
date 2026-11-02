@@ -48,6 +48,14 @@ export type ModelOutcome = (
   | { kind: 'tool_calls'; toolCalls: ToolCall[] }
 ) & { usage?: ModelUsage };
 
+/** How one generation may differ from a chat turn. */
+export interface GenerateOptions {
+  /** How long one call may take; a build writes far more than a reply. */
+  timeoutMs?: number;
+  /** A tool the model must call, instead of choosing. */
+  forceTool?: string;
+}
+
 /** Raised when OpenRouter could not answer, or is not configured. */
 export class ModelUnavailableError extends Error {
   constructor(
@@ -124,13 +132,14 @@ export class OpenRouterClient {
   async generate(
     messages: ChatMessage[],
     tools: ToolDefinition[],
+    options: GenerateOptions = {},
   ): Promise<ModelOutcome> {
     if (!this.configured) {
       throw new ModelUnavailableError('OpenRouter is not configured');
     }
 
     try {
-      return await this._once(messages, tools);
+      return await this._once(messages, tools, options);
     } catch (error) {
       const again =
         error instanceof ModelEmptyError ||
@@ -140,14 +149,18 @@ export class OpenRouterClient {
             error.status >= 500));
       if (!again) throw error;
 
-      return this._once(messages, tools);
+      return this._once(messages, tools, options);
     }
   }
 
   private async _once(
     messages: ChatMessage[],
     tools: ToolDefinition[],
+    options: GenerateOptions,
   ): Promise<ModelOutcome> {
+    const toolChoice = options.forceTool
+      ? { type: 'function', function: { name: options.forceTool } }
+      : 'auto';
     let response: Response;
     let data: Record<string, unknown>;
     try {
@@ -165,13 +178,13 @@ export class OpenRouterClient {
             ? { models: [this.model, ...this._fallbacks] }
             : {}),
           messages,
-          ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+          ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {}),
           temperature: 0.3,
           reasoning: { effort: this._effort },
           provider: { sort: 'latency' },
           usage: { include: true },
         }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
       });
       data = (await response.json()) as Record<string, unknown>;
     } catch (error) {

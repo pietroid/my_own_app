@@ -22,4 +22,5 @@ COPY drizzle ./drizzle
 # file on the Pi. One image serves every deployment.
 
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+# isolated-vm (the actions' sandbox) needs Node's startup snapshot off.
+CMD ["node", "--no-node-snapshot", "dist/main.js"]

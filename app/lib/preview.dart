@@ -5,6 +5,8 @@ import 'package:auth/auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:l10n/l10n.dart';
 import 'package:my_own_app/app/app.dart';
+import 'package:my_own_app/apps/app_run_page.dart';
+import 'package:my_own_app/apps/apps_repository.dart';
 import 'package:my_own_app/assistant/assistant.dart';
 import 'package:my_own_app/home/home_page.dart';
 
@@ -15,7 +17,8 @@ import 'package:my_own_app/home/home_page.dart';
 ///
 /// 1. the home, signed in;
 /// 2. the assistant, mid-conversation;
-/// 3. the sign-in.
+/// 3. the sign-in;
+/// 4. a built app running: a to-do list.
 ///
 /// A feature's mockup (`/create`) copies this shape into
 /// `lib/<slug>_preview.dart`: each scene seeds its state directly rather
@@ -46,6 +49,7 @@ class _PreviewApp extends StatelessWidget {
         RepositoryProvider<AssistantRepository>.value(
           value: _FakeAssistantRepository(),
         ),
+        RepositoryProvider<AppsRepository>.value(value: _FakeAppsRepository()),
       ],
       child: BlocProvider(
         create: (_) => AppBloc(authRepository: auth, initialUser: _ana),
@@ -67,6 +71,7 @@ class _PreviewApp extends StatelessWidget {
               child: const AssistantView(),
             ),
             3 => AuthScreen(authRepository: auth),
+            4 => const AppRunPage(id: 'tarefas'),
             _ => const HomePage(),
           },
         ),
@@ -100,4 +105,77 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<String> reply(List<AssistantMessage> messages) async =>
       'Por enquanto, converso. Quando o app crescer, '
       'vou poder fazer mais por você.';
+}
+
+class _FakeAppsRepository implements AppsRepository {
+  static const _todo = AppSnapshot(
+    id: 'tarefas',
+    name: 'Tarefas',
+    ui: [
+      {
+        'id': 'root',
+        'component': 'Column',
+        'children': ['form', 'list'],
+      },
+      {
+        'id': 'form',
+        'component': 'Row',
+        'children': ['field', 'add'],
+      },
+      {
+        'id': 'field',
+        'component': 'TextField',
+        'label': 'Nova tarefa',
+        'value': {'path': '/draft'},
+      },
+      {
+        'id': 'add',
+        'component': 'Button',
+        'label': 'Adicionar',
+        'action': {
+          'event': {'name': 'add_todo'},
+        },
+      },
+      {
+        'id': 'list',
+        'component': 'List',
+        'children': {'componentId': 'item', 'path': '/todos'},
+      },
+      {
+        'id': 'item',
+        'component': 'CheckBox',
+        'label': {'path': 'title'},
+        'value': {'path': 'done'},
+        'action': {
+          'event': {'name': 'toggle_todo'},
+        },
+      },
+    ],
+    data: {
+      'draft': '',
+      'todos': [
+        {'title': 'Comprar pão', 'done': true},
+        {'title': 'Pagar a conta de luz', 'done': false},
+        {'title': 'Ligar para a Bia', 'done': false},
+      ],
+    },
+  );
+
+  @override
+  Future<List<AppSummary>> list() async => [
+    const AppSummary(id: 'tarefas', name: 'Tarefas'),
+  ];
+
+  @override
+  Future<AppSnapshot> get(String id) async => _todo;
+
+  @override
+  Future<AppSnapshot> create(String prompt) async => _todo;
+
+  @override
+  Future<List<dynamic>> act(
+    String id,
+    String action,
+    Map<String, Object?> event,
+  ) async => const [];
 }

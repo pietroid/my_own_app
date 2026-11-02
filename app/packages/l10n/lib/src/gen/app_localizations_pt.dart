@@ -32,16 +32,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get homeGreetingAnonymous => 'Olá';
 
   @override
-  String get homeEmptyTitle => 'Tudo pronto';
+  String get homeEmptyTitle => 'Nenhum app ainda';
 
   @override
-  String get homeEmptyBody => 'Esta tela está em branco. É aqui que o app começa.';
+  String get homeEmptyBody => 'Descreva o app que você quer, e o assistente monta para você.';
 
   @override
   String get homeSignOut => 'Sair';
-
-  @override
-  String get assistantOpen => 'Falar com o assistente';
 
   @override
   String get assistantTitle => 'Assistente';
@@ -57,4 +54,28 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get assistantFailed => 'O assistente não respondeu. Tente de novo.';
+
+  @override
+  String get homeAssistant => 'Assistente';
+
+  @override
+  String get appsCreateHint => 'Ex.: uma lista de tarefas';
+
+  @override
+  String get appsCreate => 'Criar app';
+
+  @override
+  String get appsCreating => 'Montando o seu app…';
+
+  @override
+  String get appsCreateFailed => 'Não foi possível criar o app. Tente de novo.';
+
+  @override
+  String get appsLoadFailed => 'Não foi possível abrir o app.';
+
+  @override
+  String get appsActionFailed => 'Essa ação falhou.';
+
+  @override
+  String get appsRetry => 'Tentar de novo';
 }

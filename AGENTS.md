@@ -39,7 +39,7 @@ app/
   brand/                icon, Android foreground and splash art (+ README)
   env/                  <flavor>.json defines (examples committed)
   tool/stamp_web.sh     puts the PostHog key in a web build
-  lib/                  app (router, AppBloc), home, assistant
+  lib/                  app (router, AppBloc), home, assistant, apps (renderer)
   packages/
     analytics/          PostHog behind one seam (Analytics, NoAnalytics)
     api_client/         Dio + bearer token interceptor
@@ -49,6 +49,7 @@ app/
 server/
   src/
     analytics/          PostHog: the provider, the route → event table
+    apps/               apps as data: bundle rules, the action sandbox, routes
     assistant/          OpenRouter client, the assistant's routes
     auth/               Better Auth instance + SessionGuard
     db/                 Drizzle schema + pool + boot-time migrations
@@ -105,6 +106,27 @@ Without `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` the chat answers 503 and
 everything else works. The system prompt is `systemPrompt` in
 `server/src/assistant/assistant.service.ts`; tools go in the second argument
 of `OpenRouterClient.generate`.
+
+## Apps as data
+
+The point of the product: the person describes an app, the model builds it
+once, and from then on the app runs without the model. An app is a stored
+bundle (`generated_app`): `ui`, a flat list of components in our own subset
+of A2UI (Column, Row, List, Text, TextField, CheckBox, Button; the one with
+id `root` is the screen), bound to `data` by JSON Pointer; `data`, one JSON
+document; and `actions`, `function run(input, event)` in JS, given only the
+paths it declares and answering with a JSON Patch.
+
+- `POST /api/apps { prompt }` is one forced `create_app` tool call (and one
+  retry with the error), checked by `parseBundle`. The prompt is
+  `BUILD_PROMPT` in `server/src/apps/apps.service.ts`.
+- `POST /api/apps/:id/actions/:name { event }` runs the action in
+  isolated-vm (32 MB, 50 ms), applies the patch under a `rev` check and
+  answers it as an AG-UI `STATE_DELTA`; the app applies the same patch.
+  isolated-vm needs `node --no-node-snapshot` (in the scripts and the image).
+- The app draws it with `AppRenderer` (`app/lib/apps/`). A component it
+  does not know draws nothing; a new one goes in both `COMPONENTS` and the
+  renderer, and in `BUILD_PROMPT`.
 
 ## The design system
 

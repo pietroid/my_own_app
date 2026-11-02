@@ -134,13 +134,13 @@ abstract class AppLocalizations {
   /// No description provided for @homeEmptyTitle.
   ///
   /// In pt, this message translates to:
-  /// **'Tudo pronto'**
+  /// **'Nenhum app ainda'**
   String get homeEmptyTitle;
 
   /// No description provided for @homeEmptyBody.
   ///
   /// In pt, this message translates to:
-  /// **'Esta tela está em branco. É aqui que o app começa.'**
+  /// **'Descreva o app que você quer, e o assistente monta para você.'**
   String get homeEmptyBody;
 
   /// No description provided for @homeSignOut.
@@ -148,12 +148,6 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Sair'**
   String get homeSignOut;
-
-  /// No description provided for @assistantOpen.
-  ///
-  /// In pt, this message translates to:
-  /// **'Falar com o assistente'**
-  String get assistantOpen;
 
   /// No description provided for @assistantTitle.
   ///
@@ -184,6 +178,54 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'O assistente não respondeu. Tente de novo.'**
   String get assistantFailed;
+
+  /// No description provided for @homeAssistant.
+  ///
+  /// In pt, this message translates to:
+  /// **'Assistente'**
+  String get homeAssistant;
+
+  /// No description provided for @appsCreateHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ex.: uma lista de tarefas'**
+  String get appsCreateHint;
+
+  /// No description provided for @appsCreate.
+  ///
+  /// In pt, this message translates to:
+  /// **'Criar app'**
+  String get appsCreate;
+
+  /// No description provided for @appsCreating.
+  ///
+  /// In pt, this message translates to:
+  /// **'Montando o seu app…'**
+  String get appsCreating;
+
+  /// No description provided for @appsCreateFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não foi possível criar o app. Tente de novo.'**
+  String get appsCreateFailed;
+
+  /// No description provided for @appsLoadFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não foi possível abrir o app.'**
+  String get appsLoadFailed;
+
+  /// No description provided for @appsActionFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Essa ação falhou.'**
+  String get appsActionFailed;
+
+  /// No description provided for @appsRetry.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tentar de novo'**
+  String get appsRetry;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

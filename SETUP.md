@@ -120,7 +120,21 @@ The public domain can be either an apex (`my-own.app`) or a subdomain
    and Account > Cloudflare Tunnel > Edit).
 4. Run `scripts/cloudflare_add_domain.sh <your-domain> <web-port>` on the
    Pi. It adds the ingress rule and the DNS record.
-5. Wait for DNS, then `curl -I https://<your-domain>` should hit the Pi.
+
+   **A domain in a zone of its own** (say the Pi already serves
+   `*.pietroteruya.dev` and the new app is `my-own.app`): the `cert.pem`
+   from `cloudflared tunnel login` belongs to one zone, and
+   `cloudflared tunnel route dns` quietly creates
+   `my-own.app.pietroteruya.dev` instead. Run the script with
+   `CF_API_TOKEN` (Zone > DNS > Edit on the new zone) and it creates the
+   record in the right zone through the API. Without the token it stops
+   and says what to add in the dashboard: a proxied `CNAME @ →
+   <tunnel-id>.cfargotunnel.com` in the new zone.
+5. Wait for DNS, then `curl -I https://<your-domain>` should hit the Pi. If
+   your machine looked the name up before the record existed, it may keep
+   the "not found" answer for up to 30 minutes (the zone's negative TTL):
+   check with `dig +short <your-domain> @1.1.1.1`, and on macOS clear it
+   with `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`.
 
 ## 6. GitHub
 

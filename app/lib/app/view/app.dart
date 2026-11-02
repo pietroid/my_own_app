@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:l10n/l10n.dart';
 import 'package:my_own_app/app/app.dart';
+import 'package:my_own_app/apps/app_run_page.dart';
 import 'package:my_own_app/assistant/assistant.dart';
 import 'package:my_own_app/home/home_page.dart';
 
@@ -32,6 +33,12 @@ class App extends StatelessWidget {
              path: '/assistente',
              name: 'Assistente',
              builder: (context, state) => const AssistantPage(),
+           ),
+           GoRoute(
+             path: '/apps/:id',
+             name: 'App',
+             builder: (context, state) =>
+                 AppRunPage(id: state.pathParameters['id']!),
            ),
            GoRoute(
              path: '/auth',

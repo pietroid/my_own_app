@@ -12,8 +12,13 @@
 #
 # - a config file (/etc/cloudflared/config.yml, the usual case after
 #   `cloudflared tunnel create`): adds an ingress rule above the catch-all,
-#   creates the DNS record with `cloudflared tunnel route dns` (needs the
-#   cert.pem from `cloudflared tunnel login`) and restarts cloudflared;
+#   creates the DNS record and restarts cloudflared. With CF_API_TOKEN set
+#   the record goes through the API, which finds the zone the hostname is in;
+#   without it, through `cloudflared tunnel route dns`, which uses the
+#   cert.pem from `cloudflared tunnel login`. That cert belongs to ONE zone,
+#   and for a hostname in another zone cloudflared quietly creates
+#   <host>.<cert zone> instead (my-own.app -> my-own.app.pietroteruya.dev);
+#   the script checks for that and stops with what to do;
 # - the dashboard (cloudflared runs with `--token`): edits the tunnel's
 #   configuration and DNS through the API. Needs jq and CF_API_TOKEN, an API
 #   token with Account > Cloudflare Tunnel > Edit and Zone > DNS > Edit.
@@ -23,6 +28,68 @@ usage="usage: $0 <hostname> <local port>"
 host=${1:?$usage}
 port=${2:?$usage}
 service="http://localhost:$port"
+
+api="https://api.cloudflare.com/client/v4"
+
+cf() {
+  local out
+  out=$(curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H 'Content-Type: application/json' "$@")
+  if [[ $(jq -r .success <<< "$out") != true ]]; then
+    echo "Cloudflare API: $(jq -c .errors <<< "$out")" >&2
+    exit 1
+  fi
+  printf '%s' "$out"
+}
+
+# A proxied CNAME <host> -> <tunnel>.cfargotunnel.com, through the API.
+dns_record_via_api() {
+  local tunnel=$1 zone zone_id record record_id
+  command -v jq > /dev/null || { echo "jq is needed: sudo apt install jq" >&2; exit 1; }
+  # Find the zone the token can manage that is a suffix of the host. This
+  # handles both apex domains (my-own.app) and subdomains (app.my-own.app),
+  # and avoids guessing how many labels the registered zone has.
+  zone=$(cf "$api/zones?per_page=50" | jq -r --arg h "$host" '
+    .result
+    | map(select(. as $zone | $h == $zone.name or ($h | endswith("." + $zone.name))))
+    | sort_by(-(.name | length))
+    | .[0].name // empty
+  ')
+  zone_id=$(cf "$api/zones?name=$zone" | jq -r '.result[0].id // empty')
+  [[ -n $zone_id ]] || { echo "No Cloudflare zone found for $host with this API token" >&2; exit 1; }
+  record=$(jq -n --arg h "$host" --arg t "$tunnel.cfargotunnel.com" \
+    '{type: "CNAME", name: $h, content: $t, proxied: true}')
+  record_id=$(cf "$api/zones/$zone_id/dns_records?name=$host" | jq -r '.result[0].id // empty')
+  if [[ -n $record_id ]]; then
+    cf -X PUT "$api/zones/$zone_id/dns_records/$record_id" --data "$record" > /dev/null
+    echo "Updated DNS record $host"
+  else
+    cf -X POST "$api/zones/$zone_id/dns_records" --data "$record" > /dev/null
+    echo "Created DNS record $host"
+  fi
+}
+
+# The same record through the cert.pem, then a check of the name it got.
+dns_record_via_cert() {
+  local tunnel=$1 out fqdn
+  # As the user, not root: the cert.pem lives in ~/.cloudflared.
+  out=$(cloudflared tunnel route dns "$tunnel" "$host" 2>&1) || { echo "$out" >&2; exit 1; }
+  echo "$out"
+  # cloudflared names the record it touched: "Added CNAME <fqdn> which will
+  # route to this tunnel" or "<fqdn> is already configured to route to ...".
+  fqdn=$(grep -oE '(CNAME [^ ]+|[^ ]+ is already configured)' <<< "$out" | head -1 \
+    | sed -E 's/^CNAME //; s/ is already configured$//; s/\.$//' || true)
+  if [[ -n $fqdn && $fqdn != "$host" ]]; then
+    cat >&2 <<MSG
+
+The DNS record went to the wrong zone: cloudflared made $fqdn, not $host,
+because its cert.pem belongs to another zone. Either run this again with
+CF_API_TOKEN set (Zone > DNS > Edit), or in the Cloudflare dashboard, in the
+zone of $host, add a proxied CNAME $host -> $tunnel.cfargotunnel.com.
+Then delete the stray record $fqdn.
+MSG
+    exit 1
+  fi
+}
 
 exec_start=$(systemctl cat cloudflared 2> /dev/null | grep -m1 '^ExecStart=' || true)
 if [[ -z $exec_start ]]; then
@@ -68,13 +135,18 @@ route_with_config_file() {
 
   cloudflared --config "$config" tunnel ingress validate
   cloudflared --config "$config" tunnel ingress rule "https://$host"
-  # As the user, not root: the cert.pem lives in ~/.cloudflared.
-  cloudflared tunnel route dns "$tunnel" "$host"
+  if [[ -n ${CF_API_TOKEN:-} ]]; then
+    # The config file may name the tunnel; the record needs its id.
+    [[ $tunnel =~ ^[0-9a-f-]{36}$ ]] || tunnel=$(cloudflared tunnel info -o json "$tunnel" | jq -r .id)
+    dns_record_via_api "$tunnel"
+  else
+    dns_record_via_cert "$tunnel"
+  fi
   sudo systemctl restart cloudflared
 }
 
 route_with_api() {
-  local token claims account tunnel api config zone zone_id record_id record
+  local token claims account tunnel config
   command -v jq > /dev/null || { echo "jq is needed: sudo apt install jq" >&2; exit 1; }
   : "${CF_API_TOKEN:?the tunnel is managed in the dashboard: set CF_API_TOKEN (Tunnel Edit + DNS Edit)}"
 
@@ -83,18 +155,7 @@ route_with_api() {
   claims=$(base64 -d <<< "$token")
   account=$(jq -r .a <<< "$claims")
   tunnel=$(jq -r .t <<< "$claims")
-  api="https://api.cloudflare.com/client/v4"
   echo "Tunnel $tunnel (managed in the dashboard)"
-
-  cf() {
-    local out
-    out=$(curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H 'Content-Type: application/json' "$@")
-    if [[ $(jq -r .success <<< "$out") != true ]]; then
-      echo "Cloudflare API: $(jq -c .errors <<< "$out")" >&2
-      exit 1
-    fi
-    printf '%s' "$out"
-  }
 
   # Replaces any rule for the host, keeping the catch-all last.
   config=$(cf "$api/accounts/$account/cfd_tunnel/$tunnel/configurations" | jq --arg h "$host" --arg s "$service" '
@@ -105,27 +166,7 @@ route_with_api() {
   cf -X PUT "$api/accounts/$account/cfd_tunnel/$tunnel/configurations" --data "$config" > /dev/null
   echo "Added $host -> $service"
 
-  # Find the zone the token can manage that is a suffix of the host. This
-  # handles both apex domains (my-own.app) and subdomains (app.my-own.app),
-  # and avoids guessing how many labels the registered zone has.
-  zone=$(cf "$api/zones?per_page=50" | jq -r --arg h "$host" '
-    .result
-    | map(select(. as $zone | $h == $zone.name or ($h | endswith("." + $zone.name))))
-    | sort_by(-(.name | length))
-    | .[0].name // empty
-  ')
-  zone_id=$(cf "$api/zones?name=$zone" | jq -r '.result[0].id // empty')
-  [[ -n $zone_id ]] || { echo "No Cloudflare zone found for $host with this API token" >&2; exit 1; }
-  record=$(jq -n --arg h "$host" --arg t "$tunnel.cfargotunnel.com" \
-    '{type: "CNAME", name: $h, content: $t, proxied: true}')
-  record_id=$(cf "$api/zones/$zone_id/dns_records?name=$host" | jq -r '.result[0].id // empty')
-  if [[ -n $record_id ]]; then
-    cf -X PUT "$api/zones/$zone_id/dns_records/$record_id" --data "$record" > /dev/null
-    echo "Updated DNS record $host"
-  else
-    cf -X POST "$api/zones/$zone_id/dns_records" --data "$record" > /dev/null
-    echo "Created DNS record $host"
-  fi
+  dns_record_via_api "$tunnel"
 }
 
 if [[ $exec_start == *--token* ]]; then

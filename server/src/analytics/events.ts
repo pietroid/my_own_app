@@ -8,6 +8,8 @@
  */
 const EVENTS: Record<string, string> = {
   'POST /assistant/chat': 'assistant_turn',
+  'POST /apps': 'app_created',
+  'POST /apps/:id/actions/:action': 'app_action',
 };
 
 /** The route a request matched, without the `/api` prefix (`/items/:id`). */

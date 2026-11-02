@@ -1,4 +1,13 @@
-import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 /**
  * Everything the app keeps, in one Postgres database.
@@ -91,4 +100,29 @@ export const verification = pgTable(
 // The app
 // ---------------------------------------------------------------------------
 
-export const schema = { user, session, account, verification };
+/**
+ * An app someone had the assistant build: a stored bundle of its screen
+ * (A2UI components), its data (one JSON document) and its actions (small JS
+ * functions run in a sandbox). `rev` goes up by one with every change to
+ * `data`, so two taps never overwrite each other.
+ */
+export const generatedApp = pgTable(
+  'generated_app',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prompt: text('prompt').notNull(),
+    ui: jsonb('ui').notNull(),
+    data: jsonb('data').notNull(),
+    actions: jsonb('actions').notNull(),
+    rev: integer('rev').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index('generated_app_user_id_idx').on(table.userId)],
+);
+
+export const schema = { user, session, account, verification, generatedApp };
