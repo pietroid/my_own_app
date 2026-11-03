@@ -41,6 +41,7 @@ class _HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<_HomeView> {
   final _controller = TextEditingController();
+  AppForm _form = AppForm.mobile;
 
   @override
   void dispose() {
@@ -51,7 +52,7 @@ class _HomeViewState extends State<_HomeView> {
   Future<void> _create() async {
     final text = _controller.text;
     if (text.trim().isEmpty) return;
-    final app = await context.read<AppsCubit>().create(text);
+    final app = await context.read<AppsCubit>().create(text, form: _form);
     if (app == null || !mounted) return;
     _controller.clear();
     unawaited(context.push('/apps/${app.id}'));
@@ -111,6 +112,12 @@ class _HomeViewState extends State<_HomeView> {
                                   app.name,
                                   style: AppTypography.bodyStrong,
                                 ),
+                                subtitle: app.isEditor
+                                    ? Text(
+                                        l10n.appsEditorCaption,
+                                        style: AppTypography.caption,
+                                      )
+                                    : null,
                                 trailing: const AppIcon(
                                   iconData: AppIcons.open,
                                 ),
@@ -151,6 +158,31 @@ class _HomeViewState extends State<_HomeView> {
                         decoration: InputDecoration(
                           hintText: l10n.appsCreateHint,
                         ),
+                      ),
+                      SegmentedButton<AppForm>(
+                        segments: [
+                          ButtonSegment(
+                            value: AppForm.mobile,
+                            label: Text(l10n.appsFormMobile),
+                            icon: AppIcon(
+                              iconData: AppIcons.named['mobile']!,
+                              size: AppSpacing.iconSmall,
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: AppForm.web,
+                            label: Text(l10n.appsFormWeb),
+                            icon: AppIcon(
+                              iconData: AppIcons.named['desktop']!,
+                              size: AppSpacing.iconSmall,
+                            ),
+                          ),
+                        ],
+                        selected: {_form},
+                        showSelectedIcon: false,
+                        onSelectionChanged: state.creating
+                            ? null
+                            : (picked) => setState(() => _form = picked.first),
                       ),
                       AppButton(
                         expand: true,

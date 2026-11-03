@@ -48,6 +48,19 @@ export class AppsController {
     return this._apps.list(user.id);
   }
 
+  /** The person's My Own App Editor, made the first time. */
+  @Get('editor')
+  editor(@CurrentUser() user: AuthUser): Promise<AppSnapshot> {
+    return guard(() => this._apps.editor(user.id));
+  }
+
+  /** Brings the person's editor back to ours, as a new version. */
+  @Post('editor/reset')
+  @HttpCode(200)
+  resetEditor(@CurrentUser() user: AuthUser): Promise<EditOutcome> {
+    return guard(() => this._apps.resetEditor(user.id));
+  }
+
   @Get(':id')
   get(
     @CurrentUser() user: AuthUser,

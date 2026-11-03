@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { applyPatch, getValueByPointer, Operation } from 'fast-json-patch';
 import {
   ChatMessage,
@@ -18,6 +18,7 @@ import {
 } from './bundle';
 import { ICONS } from './catalog';
 import { Changes, describeApp, diff, EDIT_TOOLS, runEdit } from './edit';
+import { EDITOR } from './editor/editor';
 import { platformCalls } from './platform';
 import { ActionFailedError, ActionRunner } from './runner';
 
@@ -44,6 +45,8 @@ export interface AppSummary {
   id: string;
   name: string;
   form: AppForm;
+  /** Which of our own apps it is a copy of (`editor`), or null. */
+  seed: string | null;
 }
 
 /** One point of an app's history, as the conversation shows it. */
@@ -110,15 +113,85 @@ export class AppsService {
   }
 
   async list(userId: string): Promise<AppSummary[]> {
-    return this._db
-      .select({
-        id: generatedApp.id,
-        name: generatedApp.name,
-        form: generatedApp.form,
-      })
+    return (
+      this._db
+        .select({
+          id: generatedApp.id,
+          name: generatedApp.name,
+          form: generatedApp.form,
+          seed: generatedApp.seed,
+        })
+        .from(generatedApp)
+        .where(eq(generatedApp.userId, userId))
+        // The editor first, then the newest.
+        .orderBy(
+          sql`${generatedApp.seed} is null`,
+          desc(generatedApp.createdAt),
+        )
+    );
+  }
+
+  /**
+   * The person's My Own App Editor (`editor/editor.ts`), made the first
+   * time it is asked for: their own copy, theirs to change.
+   */
+  async editor(userId: string): Promise<AppSnapshot> {
+    const [found] = await this._db
+      .select({ id: generatedApp.id })
       .from(generatedApp)
-      .where(eq(generatedApp.userId, userId))
-      .orderBy(desc(generatedApp.createdAt));
+      .where(
+        and(eq(generatedApp.userId, userId), eq(generatedApp.seed, 'editor')),
+      )
+      .limit(1);
+    if (found) return this.get(userId, found.id);
+
+    const bundle = {
+      ...EDITOR,
+      actions: await this._compile(EDITOR.actions),
+    };
+    const id = await this._db.transaction(async (tx) => {
+      const [app] = await tx
+        .insert(generatedApp)
+        .values({
+          userId,
+          prompt: EDITOR_PROMPT,
+          seed: 'editor',
+          ...structuredClone(bundle),
+        })
+        .returning({ id: generatedApp.id });
+      await tx.insert(appVersion).values({
+        appId: app.id,
+        n: 1,
+        prompt: EDITOR_PROMPT,
+        ...structuredClone(bundle),
+        changes: created(bundle),
+      });
+      return app.id;
+    });
+    return this.get(userId, id);
+  }
+
+  /**
+   * Brings the person's editor back to ours, as a new version (the one
+   * they had can still be restored): the way back from an edit that broke
+   * it.
+   */
+  async resetEditor(userId: string): Promise<EditOutcome> {
+    const current = await this.editor(userId);
+    const row = await this._row(userId, current.id);
+    await this._firstVersion(row);
+    const bundle: Bundle = {
+      ...structuredClone(EDITOR),
+      actions: await this._compile(EDITOR.actions),
+    };
+    return this._commit(userId, row.id, row, {
+      prompt: '',
+      form: 'mobile',
+      reply: 'O editor voltou a ser o original.',
+      bundle,
+      changes: diff(bundleOf(row), bundle),
+      data: () => structuredClone(EDITOR.data),
+    });
   }
 
   async get(userId: string, id: string): Promise<AppSnapshot> {
@@ -749,9 +822,10 @@ The Dart runs in an interpreter (dart_eval) that supports a subset of the langua
 
 Where an action runs. Every action runs on the person's device the moment they tap, so the screen changes at once; what differs is whether the change is saved:
 - "server" (the default): saved. The device shows its patch at once, then the server runs the same action on its own copy of the data and keeps the patch. Anything that must still be there tomorrow is a server action, and most actions are. Because it also runs on the server, where nothing typed on the device exists, a server action reads what the person typed only from the event (a button's context, {"title": {"path": "/draft"}}), never from input; input is for saved data (the list, a total). It can clear the field in the same patch.
+- An action named "start", if there is one, runs when the app opens.
 - "client": not saved; only for screen-only state (a filter, a tab, a form step). Its third argument, call: "final List kept = await call('save_item', {'title': title});" runs a server action and resolves to its patch. Never write a client action that only calls a server one: write the server action and point the button at it.
 
-Components (every one has "id" and "component"). Any component may also have "visible" ({"path"}: drawn only when the value is something, not null, false, 0, "" or empty; or {"path", "is": value}: only when it equals value), "weight" (a number: inside a Row, its share of the width) and "inset" (a number or {"path"}: steps of indentation from the left).
+Components (every one has "id" and "component"). Any component may also have "visible" ({"path"}: drawn only when the value is something, not null, false, 0, "" or empty; or {"path", "is": value}: only when it equals value, and with "not": true only when it does not), "weight" (a number: inside a Row, its share of the width) and "inset" (a number or {"path"}: steps of indentation from the left).
 Besides the data, components (never actions) may read /$viewport/width, /$viewport/height and /$viewport/size ("compact" for a phone, "medium", "expanded" for a wide window), and /$pending/<action name>: the event of a platform action on its way, missing when none is.
 Layout:
 - Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index". Column and Row take "justify" (start, center, end, spaceBetween) and "align" (start, center, end, stretch). A List may be "direction": "horizontal" (a strip that scrolls sideways). A Column or Row with "action" is tapped whole.
@@ -778,6 +852,9 @@ Engine:
 An action reference is {"event": {"name": "<action name>", "context": {"key": {"path": "/draft"} or a literal}}}; the context values reach run as event.key.
 
 All text the person reads is in Brazilian Portuguese.`;
+
+/** What the editor's first version says it was made from. */
+const EDITOR_PROMPT = 'O editor do My Own App';
 
 /** What the model is told of the app's form, with each request. */
 const FORMS: Record<AppForm, string> = {
@@ -826,6 +903,8 @@ Change it with the tools, touching only what the request is about:
 - set_action / remove_action only when an action's code must change, or a new one is needed. Moving, restyling or relabelling something never needs one. read_action before changing an action's code.
 - rename_app only when asked.
 Several tools may be called at once. When the app is right, answer in one or two short sentences of Brazilian Portuguese saying what changed, and call no tool. When the request is a question, or not possible with these components, change nothing and say so.
+
+Platform actions ("on": "platform") run on the server only and may read and change the person's own apps through call: await call('apps.list', {}) answers [{id, name, form, seed}]; 'apps.get' {id} and 'apps.version' {id, n} answer {id, name, form, ui, data, actions: {name: {on, input}}, version, rev}; 'apps.history' {id} answers {current, versions: [{n, prompt, reply, changes}]}; 'apps.create' {prompt, form}, 'apps.send' {id, prompt, focus}, 'apps.restore' {id, n} and 'apps.setForm' {id, form} change an app and answer {version, app}. At most 8 calls per tap, and one of create/send. Cast what they answer ((await call('apps.list', {})) as List). An app that is an editor (it has a Surface) uses them; others rarely need them.
 
 ${RULES}`;
 

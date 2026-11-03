@@ -55,15 +55,27 @@ class AppsCubit extends Cubit<AppsState> {
   }
 
   /// Builds an app from [prompt]; answers with it, or null when it failed.
-  Future<AppSummary?> create(String prompt) async {
+  Future<AppSummary?> create(
+    String prompt, {
+    AppForm form = AppForm.mobile,
+  }) async {
     final text = prompt.trim();
     if (text.isEmpty || state.creating) return null;
 
     emit(AppsState(apps: state.apps, creating: true));
     try {
-      final app = await _repository.create(text);
-      final summary = AppSummary(id: app.id, name: app.name);
-      emit(AppsState(apps: [summary, ...state.apps]));
+      final app = await _repository.create(text, form: form);
+      final summary = AppSummary(id: app.id, name: app.name, form: app.form);
+      // After the editor, which stays first.
+      final editors = [
+        for (final a in state.apps)
+          if (a.isEditor) a,
+      ];
+      final others = [
+        for (final a in state.apps)
+          if (!a.isEditor) a,
+      ];
+      emit(AppsState(apps: [...editors, summary, ...others]));
       return summary;
     } on DioException catch (error) {
       emit(
@@ -128,33 +140,47 @@ class AppRunState extends Equatable {
 /// {@endtemplate}
 class AppRunCubit extends Cubit<AppRunState> {
   /// {@macro app_run_cubit}
+  ///
+  /// `source` loads the app instead of `get(id)` (the editor's own route);
+  /// `start` is the event its `start` action runs with once it is open.
   AppRunCubit({
     required this._repository,
-    required this._id,
+    required String id,
     ClientRunner? runner,
-  }) : _runner = runner ?? ClientRunner(),
+    this._source,
+    this._start = const {},
+  }) : _given = id,
+       _runner = runner ?? ClientRunner(),
        super(const AppRunState());
 
   final AppsRepository _repository;
-  final String _id;
+  final String _given;
+  final Future<AppSnapshot> Function()? _source;
+  final Map<String, Object?> _start;
   final ClientRunner _runner;
+  var _started = false;
+
+  /// The app's id: the one loaded, or the one it was opened with.
+  String get _id => state.app?.id ?? _given;
 
   /// The saved actions on their way to the server, one after another.
   Future<void> _sending = Future.value();
 
-  /// Loads the app as it is on the server.
+  /// Loads the app as it is on the server. The first time, an action named
+  /// `start` runs, with the event the app was opened with.
   Future<void> load() async {
     try {
-      final app = await _repository.get(_id);
+      final source = _source;
+      final app = await (source == null ? _repository.get(_id) : source());
       if (!isClosed) emit(AppRunState(app: app, pending: state.pending));
     } on DioException {
       if (!isClosed) emit(const AppRunState(loadFailed: true));
+      return;
     }
-  }
-
-  /// The app as an edit left it: its new screen, actions and data.
-  void replace(AppSnapshot app) {
-    if (!isClosed) emit(AppRunState(app: app, pending: state.pending));
+    if (!_started && state.app?.actions['start'] != null) {
+      _started = true;
+      await act('start', _start);
+    }
   }
 
   /// What the person typed into a field: kept on the device until a button

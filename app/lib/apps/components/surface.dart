@@ -139,18 +139,25 @@ class _SurfaceState extends State<_Surface> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.s6),
-              child: AppRenderer(
-                ui: app.ui,
-                data: app.data,
-                pending: pending,
-                // A version is looked at, not used.
-                onEdit: cubit?.edit ?? (_, _) {},
-                onAction: (action, event) =>
-                    cubit == null ? null : unawaited(cubit.act(action, event)),
-                onSelect: widget.onPick,
-                selectedId: widget.selectedId,
+            // Built inside the frame: its insets are the drawn phone's.
+            child: Builder(
+              builder: (context) => SingleChildScrollView(
+                // Below a drawn phone's status bar, above its home indicator.
+                padding: MediaQuery.paddingOf(
+                  context,
+                ).add(const EdgeInsets.all(AppSpacing.s6)),
+                child: AppRenderer(
+                  ui: app.ui,
+                  data: app.data,
+                  pending: pending,
+                  // A version is looked at, not used.
+                  onEdit: cubit?.edit ?? (_, _) {},
+                  onAction: (action, event) => cubit == null
+                      ? null
+                      : unawaited(cubit.act(action, event)),
+                  onSelect: widget.onPick,
+                  selectedId: widget.selectedId,
+                ),
               ),
             ),
           ),

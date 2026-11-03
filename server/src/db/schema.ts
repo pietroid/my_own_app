@@ -127,6 +127,8 @@ export const generatedApp = pgTable(
     version: integer('version').notNull().default(1),
     /** What it is made for: `mobile` (a phone) or `web` (a browser). */
     form: text('form').$type<AppForm>().notNull().default('mobile'),
+    /** Which of our own apps this is a copy of (`editor`), or null. */
+    seed: text('seed'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

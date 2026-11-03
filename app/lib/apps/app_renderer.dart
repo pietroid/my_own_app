@@ -246,12 +246,13 @@ class _Render {
   }
 
   /// Whether `visible` lets a component draw: `{"path", "is": x}` when the
-  /// value equals x; otherwise when it is something (not null, false, 0, or
-  /// empty).
+  /// value equals x (`"not": true`: when it does not); otherwise when it is
+  /// something (not null, false, 0, or empty).
   bool shown(Object? visible, _Scope scope) {
     final v = value(visible, scope);
     if (visible is Map && visible.containsKey('is')) {
-      return jsonEncode(v) == jsonEncode(visible['is']);
+      final same = jsonEncode(v) == jsonEncode(visible['is']);
+      return visible['not'] == true ? !same : same;
     }
     return switch (v) {
       null || false || 0 || '' => false,

@@ -16,7 +16,7 @@ describe('an app’s form', () => {
     expect(asked).toContain('for the web');
     expect(asked).toContain('Um contador');
     expect(await t.apps.list('ana')).toEqual([
-      { id: app.id, name: 'Contador', form: 'web' },
+      { id: app.id, name: 'Contador', form: 'web', seed: null },
     ]);
   });
 

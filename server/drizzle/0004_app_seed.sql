@@ -1,0 +1,1 @@
+ALTER TABLE "generated_app" ADD COLUMN "seed" text;

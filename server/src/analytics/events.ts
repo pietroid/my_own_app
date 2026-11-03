@@ -13,6 +13,7 @@ const EVENTS: Record<string, string> = {
   'POST /apps/:id/messages': 'app_edited',
   'POST /apps/:id/versions/:n/restore': 'app_restored',
   'PATCH /apps/:id': 'app_form_changed',
+  'POST /apps/editor/reset': 'editor_reset',
 };
 
 /** The route a request matched, without the `/api` prefix (`/items/:id`). */

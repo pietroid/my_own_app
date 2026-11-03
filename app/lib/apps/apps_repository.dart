@@ -22,6 +22,7 @@ class AppSummary extends Equatable {
     required this.id,
     required this.name,
     this.form = AppForm.mobile,
+    this.seed,
   });
 
   /// The app's id.
@@ -33,8 +34,14 @@ class AppSummary extends Equatable {
   /// What it is made for.
   final AppForm form;
 
+  /// Which of our own apps it is a copy of (`editor`), or null.
+  final String? seed;
+
+  /// Whether it is the person's My Own App Editor.
+  bool get isEditor => seed == 'editor';
+
   @override
-  List<Object?> get props => [id, name, form];
+  List<Object?> get props => [id, name, form, seed];
 }
 
 /// {@template app_action}
@@ -320,6 +327,7 @@ class AppsRepository {
           id: (item as Map<String, dynamic>)['id'] as String,
           name: item['name'] as String,
           form: AppForm.of(item['form']),
+          seed: item['seed'] as String?,
         ),
     ];
   }
@@ -377,6 +385,20 @@ class AppsRepository {
   Future<AppEdit> restore(String id, int n) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/apps/$id/versions/$n/restore',
+    );
+    return AppEdit.fromJson(response.data!);
+  }
+
+  /// The person's My Own App Editor, made the first time it is asked for.
+  Future<AppSnapshot> editor() async {
+    final response = await _api.get<Map<String, dynamic>>('/apps/editor');
+    return AppSnapshot.fromJson(response.data!);
+  }
+
+  /// Brings the person's editor back to the original, as a new version.
+  Future<AppEdit> resetEditor() async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/apps/editor/reset',
     );
     return AppEdit.fromJson(response.data!);
   }

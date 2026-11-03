@@ -39,7 +39,8 @@ app/
   brand/                icon, Android foreground and splash art (+ README)
   env/                  <flavor>.json defines (examples committed)
   tool/stamp_web.sh     puts the PostHog key in a web build
-  lib/                  app (router, AppBloc), home, assistant, apps (renderer, studio)
+  lib/                  app (router, AppBloc), home, assistant, apps (renderer,
+                        components/ by group, run page)
   packages/
     analytics/          PostHog behind one seam (Analytics, NoAnalytics)
     api_client/         Dio + bearer token interceptor
@@ -51,8 +52,9 @@ runner/                 the actions' interpreter, Dart: compile (server), run (b
 server/
   src/
     analytics/          PostHog: the provider, the route → event table
-    apps/               apps as data: bundle rules, the action runner process, routes,
-                        edits by tools and versions (edit.ts)
+    apps/               apps as data: catalog.ts (components, icons), bundle rules, the
+                        action runner process, routes, edits by tools and versions
+                        (edit.ts), platform calls (platform.ts), editor/ (the studio)
     assistant/          OpenRouter client, the assistant's routes
     auth/               Better Auth instance + SessionGuard
     db/                 Drizzle schema + pool + boot-time migrations
@@ -117,8 +119,8 @@ of `OpenRouterClient.generate`.
 The point of the product: the person describes an app, the model builds it
 once, and from then on the app runs without the model. An app is a stored
 bundle (`generated_app`): `ui`, a flat list of components in our own subset
-of A2UI (Column, Row, List, Text, TextField, CheckBox, Button; the one with
-id `root` is the screen), bound to `data` by JSON Pointer; `data`, one JSON
+of A2UI (21 of them, `server/src/apps/catalog.ts`; the one with id `root`
+is the screen), bound to `data` by JSON Pointer; `data`, one JSON
 document; and `actions`, `Future<List> run(Map input, Map event, Function
 call) async` in **Dart**, given only the paths it declares and answering
 with a JSON Patch. **Every action runs on the device first**, so a tap
@@ -158,23 +160,25 @@ only on the device, so a saved action reads it from the event (a button's
   `AppRunCubit` holds the local-first rules.
 - The whole contract, the runner's protocol and its limits:
   [product/spec/actions.md](./product/spec/actions.md).
-- On a window at least `AppSpacing.phoneFrameBreakpoint` wide, the app runs
-  inside `AppPhoneFrame`.
-- The app draws it with `AppRenderer` (`app/lib/apps/`). A component it
-  does not know draws nothing; a new one goes in both `COMPONENTS` and the
-  renderer, and in `BUILD_PROMPT`.
+- An app is made for a `form`, `mobile` or `web` (`PATCH /api/apps/:id`),
+  drawn in `AppPhoneFrame` or `AppBrowserFrame`.
+- A third place: `"on": "platform"` runs on the server only and may `call`
+  the person's apps (`apps.list`, `apps.send`, ...; `platform.ts`).
+- The app draws it with `AppRenderer` (`app/lib/apps/`, components in
+  `components/`). A component it does not know draws nothing; a new one
+  goes in `COMPONENTS` (`catalog.ts`), the renderer, and its line in
+  `RULES`.
 
-### The studio: changing an app
+### The studio is an app: My Own App Editor
 
-A built app opens beside the conversation that changes it (and, on a wide
-window, an inspector where any component can be picked and made the
-subject of a request). Every request is a **version** (`app_version`: the
-request, the reply, the app right after); any version can be looked at and
-brought back. `POST /api/apps/:id/messages` changes the app with **tools**
-(`server/src/apps/edit.ts`, `EDIT_PROMPT`): the model sees the screen and
-the data, but the actions only by name; it reads one with `read_action`
-and writes one with `set_action` only when its code must change, so only
-those are recompiled. Spec: [product/spec/studio.md](./product/spec/studio.md).
+Every account has a copy of **My Own App Editor** (`seed: 'editor'`,
+`server/src/apps/editor/editor.ts`): the studio, made of catalog components
+and Dart actions, not of widgets and blocs. Opening any app (`/apps/:id`)
+runs the editor with `start {id}`. A `Surface` runs the app live; platform
+actions (`apps.send`, `apps.history`, ...) change it and its versions. A
+broken editor falls back to running the app alone, with **Restaurar
+editor** (`POST /api/apps/editor/reset`). Every request is still a version
+(`app_version`). Spec: [product/spec/editor.md](./product/spec/editor.md).
 
 ## The design system
 

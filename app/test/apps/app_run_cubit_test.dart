@@ -231,4 +231,35 @@ void main() {
       await cubit.close();
     },
   );
+
+  test('opened from another source, it runs its start action with the '
+      'event it was opened with', () async {
+    const editor = AppSnapshot(
+      id: 'e',
+      name: 'Editor',
+      ui: [],
+      data: {},
+      actions: {'start': AppAction(input: [], evc: 'AAAA', platform: true)},
+    );
+    when(
+      () => repository.act('e', 'start', {'id': 'a'}),
+    ).thenAnswer(
+      (_) async => [
+        {'op': 'add', 'path': '/editing', 'value': 'a'},
+      ],
+    );
+    final cubit = AppRunCubit(
+      repository: repository,
+      id: '',
+      source: () async => editor,
+      start: {'id': 'a'},
+    );
+    await cubit.load();
+    expect(cubit.state.app!.data['editing'], 'a');
+
+    // Loaded again (after an edit), it does not start again.
+    await cubit.load();
+    verify(() => repository.act('e', 'start', {'id': 'a'})).called(1);
+    await cubit.close();
+  });
 }

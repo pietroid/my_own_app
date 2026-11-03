@@ -29,6 +29,7 @@ class ActionCompileError implements Exception {
 ///
 /// Throws [ActionCompileError] when it does not compile.
 Uint8List compileAction(String code) {
+  _warm();
   final compiler = Compiler();
   try {
     final program = compiler.compile({
@@ -45,4 +46,27 @@ String _message(Object error) {
   if (error is CompileError) return error.message;
   final text = '$error';
   return text.length > 500 ? '${text.substring(0, 500)}…' : text;
+}
+
+var _warmed = false;
+
+/// dart_eval 0.8.5 fails the first program of a process that reads some
+/// core members on a typed value (`List x; x.length`), with a RangeError
+/// from its own state; every program after compiles. So the first compile
+/// of a process is one of ours, made to be thrown away.
+void _warm() {
+  if (_warmed) return;
+  _warmed = true;
+  try {
+    Compiler().compile({
+      'app': {
+        'main.dart': wrapAction('''
+int f(List x, Map m, String s) { return x.length + m.length + s.length; }
+Future<List> run(Map input, Map event, Function call) async { return []; }
+'''),
+      },
+    });
+    // Whatever it throws is the point of it.
+    // ignore: avoid_catches_without_on_clauses
+  } catch (_) {}
 }

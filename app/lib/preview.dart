@@ -176,6 +176,15 @@ class _FakeAppsRepository implements AppsRepository {
   }) async => _todo;
 
   @override
+  Future<AppSnapshot> editor() async => _todo;
+
+  @override
+  Future<AppEdit> resetEditor() async => const AppEdit(
+    version: AppVersion(n: 2, prompt: '', reply: ''),
+    app: _todo,
+  );
+
+  @override
   Future<AppEdit> setForm(String id, AppForm form) async => AppEdit(
     version: AppVersion(
       n: 3,

@@ -87,3 +87,28 @@ Future<List> run(Map input, Map event, Function call) async { ... }
   `ClientActionFailed`; the person sees the app's usual error.
 - `GET /api/apps/:id` sends `actions: { name: { on, input, evc } }`, every
   action's bytecode; no source leaves the server.
+
+## Platform actions (`on: "platform"`)
+
+A platform action runs **on the server only**: the device never runs it
+first (it reaches the person's other apps, which the device has no copy
+of, and running twice would build twice). While it runs, the screen reads
+its event at `/$pending/<name>`; it is not queued behind saved actions, and
+its patch goes on top of the data as it is when it ends.
+
+Its `call` reaches the platform (`server/src/apps/platform.ts`), scoped to
+the person who tapped: `apps.list`, `apps.get`, `apps.create`, `apps.send`,
+`apps.history`, `apps.version`, `apps.restore`, `apps.setForm`. Answers
+are JSON with no bytecode or source. At most 8 calls per tap, one of which
+may reach the model; a refused call fails the tap with its Portuguese
+words (422).
+
+Runner protocol: a run with `"calls": true` may write `{"id", "call":
+{"seq", "name", "event"}}` and wait for `{"id", "type": "answer", "seq",
+"result" | "error"}`; requests are handled side by side, and the run's
+2-second clock stops while a call is out.
+
+The compiler is warmed once per process (`compile.dart`): dart_eval 0.8.5
+fails the first program of a process that reads `.length` on a typed
+value. `call`'s parameters are untyped in the wrapper, because a typed `Map`
+refused maps built from data.

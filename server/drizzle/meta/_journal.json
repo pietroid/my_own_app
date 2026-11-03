@@ -29,6 +29,13 @@
       "when": 1793655417824,
       "tag": "0003_app_form",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793665442263,
+      "tag": "0004_app_seed",
+      "breakpoints": true
     }
   ]
 }

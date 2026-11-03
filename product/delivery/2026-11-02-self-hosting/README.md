@@ -23,6 +23,12 @@
 > with a2ui components and dart code instead of plain widgets and bloc. Fill in
 > any gaps necessary (requests, etc)
 
+> limit is close to be reached, lets speed
+
+> is 92% ok to spend on this? or maybe not enough
+
+> now that the limit is available proceed with the stage 5
+
 ## 2. The plan
 
 **The goal.** Every account starts with one project, **My Own App Editor**.
@@ -190,80 +196,78 @@ placeholder one level down.
 - One real run against the model: create a web app *from inside the editor*,
   then change it from the editor's conversation.
 
-## Build status (2026-11-02, session 1 stopped near the usage limit)
+## 3. What was built
 
-Steps 1–4 are built and tested; step 5 (the editor bundle) is not started.
-Nothing is committed.
+The editor, real bundle, real renderer, prints of the build (preview entry
+point against fakes; the editor's data dumped from the server harness after
+real platform calls, then deleted):
 
-| Step | State | Proof |
-|------|-------|-------|
-| 1 Catalog v2 | done | `server/src/apps/catalog.ts` (+ spec, 11), renderer split into `app/lib/apps/components/{layout,display,input,surface}.dart`, `test/apps/catalog_test.dart` |
-| 2 Form | done (server + app models + `AppBrowserFrame` + run page) | `drizzle/0003_app_form.sql`, `PATCH /api/apps/:id`, `form.spec.ts` (5, on PGlite), `test/apps/form_test.dart`. The Celular / Web *switch* goes in the editor bundle (step 5), not in the native studio that step 5 removes |
-| 3 Platform calls | done | `on: "platform"`, `server/src/apps/platform.ts`, runner protocol `call`/`answer` (`runner/bin/runner.dart`, `runner.ts`, clock paused during calls), `/$pending`, `platform.spec.ts` (6), runner tests (11), cubit tests |
-| 4 Surface | done | `components/surface.dart`, `test/apps/surface_test.dart` (5) |
-| 5 Editor bundle | **to do** | — |
+| | |
+|---|---|
+| ![home](img/build-1.png) | ![app](img/build-2.png) |
+| 1 Home: the editor first, Celular / Web on create | 2 Editor on a phone, App tab: the to-do app running in a Surface |
+| ![conversa](img/build-3.png) | ![componentes](img/build-4.png) |
+| 3 Conversa: versions as turns, a component in focus | 4 Componentes: the tree (`inset`, `component:` icons), the picked button's menu |
+| ![versões](img/build-5.png) | |
+| 5 Versões, newest first | |
 
-Found and fixed on the way: a dart_eval check refused `call(name, m)` when
-`m` was a map built from data (`{'id': event['id']}`), in client actions
-too; `call`'s parameters in the wrapper are now untyped
-(`runner/lib/src/source.dart`, `runnerVersion` `+call.2`, regression test).
+![wide](img/build-6.png)
+6 A wide window (`/$viewport/size` = expanded): conversation · app · components, picking on, `add` outlined.
 
-Added to the engine for the editor (in RULES): `visible` is truthy or
-`{"path", "is": x}`; Row/Column take `action`; Icon `component:<Type>`;
-`/$viewport/size` (`compact`/`medium`/`expanded`); `start` is planned below.
+**The rule that matters.** The studio is data: `server/src/apps/editor/editor.ts`
+(21-component catalog, 11 Dart actions, 4 of them platform). Opening an app
+runs the person's editor with `start {id}`; the native studio
+(`studio_chat`, `studio_inspector`, `studio_cubit`) is deleted.
 
-Session 1 cost: **$8.96** (from `mcp__usage-bars__session_cost`; includes the talk and the plan). No OpenRouter calls: every model reply in the tests is scripted.
+**Server.** `catalog.ts` (components, icons, references), `form`
+(`0003_app_form.sql`, `PATCH /api/apps/:id`), `seed` (`0004_app_seed.sql`),
+`platform.ts` (8 calls, limits, Portuguese refusals), `runner.ts` (calls back
+from a run, clock paused), `editor/editor.ts`, `GET /api/apps/editor`,
+`POST /api/apps/editor/reset`, two analytics rows, prompts (catalog,
+`visible`, `$viewport`, `$pending`, `start`, platform in `EDIT_PROMPT`).
 
-### Step 5 brief (next session: `/create build self-hosting`)
+**Runner.** Concurrent JSON-lines protocol with `call`/`answer`;
+`call` untyped (a dart_eval type check refused maps built from data);
+the compiler warmed once per process (dart_eval failed the first program of
+a process reading `.length` on a typed value: that likely failed the first
+build after every restart, hidden by the retry). `runnerVersion` `+call.2`.
 
-- **Server**: `generated_app.seed` (text, null; `'editor'`) + migration;
-  `server/src/apps/editor/editor.ts` exports the editor bundle (a TS module,
-  not JSON, so the Dart helpers `treeOf`, `turnsOf`, `versionRowsOf`,
-  `pickedRowsOf`, `slim`, `viewsOf` are written once and prepended to each
-  action); `AppsService.editor(userId)` seeds/returns it,
-  `resetEditor(userId)` re-seeds as a new version; routes `GET
-  /api/apps/editor`, `POST /api/apps/editor/reset` (before `:id`, analytics
-  row); `list` returns `seed`, editor first; `EDIT_PROMPT` documents
-  `on: "platform"` and the `apps.*` calls; `editor.spec.ts`: it parses, every
-  action compiles, `start` on a counter app fills `/tree`, `/turns`,
-  `/versionRows`.
-- **Editor data**: `editing, app (slim: no data), history, turns,
-  versionRows, tree, picked, pickedRows, focus, focusLabel, picking,
-  pickLabel, viewing, viewingOn, viewingLabel, draft, revision, tab,
-  formChoice, title`.
-- **Editor actions**: platform `start {id}` (apps.get + apps.history),
-  `send {id, prompt, focus, picked}`, `restore {id, n}`, `set_form {id,
-  value}`; client `view {n}`, `back`, `toggle_picking`, `pick
-  {componentId}`, `ask_change`, `clear_focus`.
-- **Editor layout**: `expanded` → Row of three (conversation + versions
-  tabs · Surface · tree + picked menu); otherwise Tabs App · Conversa ·
-  Componentes · Versões. Surface binds `app /editing`, `version /viewing`,
-  `revision /revision`, `picking /picking`, `selected /picked`, action
-  `pick`. Pending bubble and "Pensando…" read `/$pending/send`.
-- **Engine**: `AppRunCubit` runs an action named `start` after load, with
-  the page's arguments (one line in RULES).
-- **App**: `AppsRepository.editor()/resetEditor()`; `AppRunPage(id)` runs
-  the editor with `start {id}`; falls back to running the app plainly with
-  a "Restaurar editor" button if the editor fails to load. Delete
-  `studio_chat.dart`, `studio_inspector.dart`, `studio_cubit.dart`, their
-  tests and unused `studio*`/`component*` l10n keys; home shows
-  `AppSummary.seed` (editor first) and a Celular | Web choice on create.
-- Then Phase 4: prints via a preview entry point, `product/spec/editor.md`,
-  update `actions.md`, `studio.md`, AGENTS.md (Layout + a pointer section).
+**App.** `AppRenderer` split into `components/{layout,display,input,surface}.dart`,
+`AppBrowserFrame`, `AppRunCubit` (`platform`, `pending`, `source`, `start`),
+`AppRunPage` (editor, fallback), home (editor caption, form on create).
 
-## Build brief
+**Tests.** Server 62 → see check below (new: `catalog.spec` 11, `form.spec`
+5, `platform.spec` 6, `editor.spec` 9, on PGlite with the real runner and a
+scripted model); runner 11; app: catalog, form, surface, run page, cubit
+(platform, pending, start). No flaky test seen.
 
-- Ship the steps in order, with `.tool/check` green after each one.
-- Files to change: `server/src/apps/{bundle,apps.service,edit,runner,
-  apps.controller,rebuild}.ts`, `server/src/db/schema.ts` (+ `form`,
-  `seed`), `server/src/analytics/events.ts` (PATCH form), `runner/`
-  (the call message), `app/lib/apps/` (the renderer split into
-  `components/`, `studio_inspector.dart`, `app_run_page.dart`,
-  `apps_repository.dart`, `apps_cubit.dart`), `app_ui` (`AppBrowserFrame`,
-  icons, any tokens), and `app_pt.arb`.
-- New files: `server/src/apps/editor/editor.bundle.json`,
-  `server/src/apps/platform.ts` (the `apps.*` calls).
-- Specs to update: `product/spec/actions.md` (catalog, platform calls),
-  `product/spec/studio.md` (form, Surface), and a new
-  `product/spec/editor.md`.
-- Still open: the two questions above.
+**Where it differs from the plan.**
+- The bundle is a TS module, not `editor.bundle.json`: the Dart helpers are
+  written once and prepended to each action (the runner has no imports).
+- The editor shows its own name in the app bar and the edited app's in its
+  header; the home stays native, as asked.
+- Engine additions the editor needed, beyond the plan: `visible` truthy /
+  `is` / `not`, `action` on Row and Column, Icon `component:<Type>`,
+  `/$viewport/size`, an action named `start`, Surface `revision`.
+- `npm run apps:rebuild -- --editor` is not written: Restaurar editor
+  (per person) covers it.
+- When the editor edits itself, the change shows the next time it opens.
+
+## 4. How to turn it on
+
+Nothing to set. Migrations `0003`/`0004` run on boot; each person's editor
+is made the first time they open an app. Without `OPENROUTER_API_KEY` the
+editor opens and runs apps; sending a change refuses with "O assistente
+ainda não está conectado a um modelo."
+
+## 5. Cost and time
+
+| Session | What | USD |
+|---------|------|-----|
+| 1 | plan, steps 1–4 | 8.96 |
+| 2 | step 5, prints, docs | 8.06 |
+| | **total** | **17.01** |
+
+USD from `mcp__usage-bars__session_cost`; it includes the talk and two
+waits on the usage limit. No OpenRouter calls: every model reply in the
+tests and prints is scripted. Never run against a real model.

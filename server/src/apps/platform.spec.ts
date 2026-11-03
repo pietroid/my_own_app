@@ -72,7 +72,7 @@ describe('platform actions', () => {
     const delta = await t.apps.act('ana', editor.id, 'refresh', {});
     expect(delta.delta[0].op).toBe('replace');
     expect((await data()).apps).toEqual([
-      { id: editor.id, name: 'Editor', form: 'mobile' },
+      { id: editor.id, name: 'Editor', form: 'mobile', seed: null },
     ]);
     await expect(
       t.apps.act('ana', editor.id, 'peek', { id: bias.id }),

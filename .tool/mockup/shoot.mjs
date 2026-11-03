@@ -8,7 +8,10 @@ await new Promise((r) => ws.addEventListener('open', r, { once: true }));
 let id = 0; const pending = new Map();
 ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } });
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+// SHOT_WIDTH / SHOT_HEIGHT: a wider window (a desktop layout); a phone by default.
+const width = Number(process.env.SHOT_WIDTH) || 390;
+const height = Number(process.env.SHOT_HEIGHT) || 844;
+await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: width > 390 ? 1 : 2, mobile: width <= 390 });
 await send('Page.enable');
 await send('Page.navigate', { url });
 await new Promise((r) => setTimeout(r, Number(wait)));
