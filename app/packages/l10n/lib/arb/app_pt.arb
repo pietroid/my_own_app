@@ -37,5 +37,7 @@
   "appsEditorReset": "Restaurar editor",
   "appsEditorCaption": "O editor dos seus apps",
   "appsFormMobile": "Celular",
-  "appsFormWeb": "Web"
+  "appsFormWeb": "Web",
+  "appsEnginePlaceholderTitle": "O motor do app",
+  "appsEnginePlaceholderBody": "Aqui roda o app que este editor está editando."
 }

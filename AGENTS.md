@@ -119,7 +119,9 @@ of `OpenRouterClient.generate`.
 The point of the product: the person describes an app, the model builds it
 once, and from then on the app runs without the model. An app is a stored
 bundle (`generated_app`): `ui`, a flat list of components in our own subset
-of A2UI (21 of them, `server/src/apps/catalog.ts`; the one with id `root`
+of A2UI plus the structure of a real app (35 of them: Screen, TopBar, NavBar,
+Split, Panel, Box, ListItem, ...; `server/src/apps/catalog.ts`; any of them
+takes box props named by tokens, never pixels; the one with id `root`
 is the screen), bound to `data` by JSON Pointer; `data`, one JSON
 document; and `actions`, `Future<List> run(Map input, Map event, Function
 call) async` in **Dart**, given only the paths it declares and answering

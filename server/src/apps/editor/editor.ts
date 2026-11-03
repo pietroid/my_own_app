@@ -14,7 +14,7 @@ import type { ActionDef, Bundle, Component } from '../bundle';
  */
 
 /** Bumped when this file changes: a copy older than it can be reset. */
-export const EDITOR_VERSION = 1;
+export const EDITOR_VERSION = 2;
 
 /**
  * Dart every action shares (the runner has no imports): turning the edited
@@ -23,6 +23,20 @@ export const EDITOR_VERSION = 1;
 const HELPERS = `
 String kindName(String t) {
   switch (t) {
+    case 'Screen': return 'Tela';
+    case 'TopBar': return 'Barra superior';
+    case 'NavBar': return 'Navegação';
+    case 'Split': return 'Divisão';
+    case 'Panel': return 'Painel';
+    case 'Box': return 'Caixa';
+    case 'Grid': return 'Grade';
+    case 'Spacer': return 'Espaço';
+    case 'ListItem': return 'Item';
+    case 'Avatar': return 'Avatar';
+    case 'Progress': return 'Progresso';
+    case 'Stat': return 'Número';
+    case 'Callout': return 'Aviso';
+    case 'EmptyState': return 'Vazio';
     case 'Column': return 'Coluna';
     case 'Row': return 'Linha';
     case 'List': return 'Lista';
@@ -68,8 +82,16 @@ List refsOf(Map c) {
     final template = children as Map;
     out.add([template['componentId'], true]);
   }
-  if (c['child'] is String) out.add([c['child'], false]);
-  if (c['content'] is String) out.add([c['content'], false]);
+  for (final slot in ['header', 'leading', 'child', 'content', 'body', 'footer', 'nav']) {
+    if (c[slot] is String) out.add([c[slot], false]);
+  }
+  final trailing = c['trailing'];
+  if (trailing is String) out.add([trailing, false]);
+  if (trailing is List) {
+    for (final id in (trailing as List)) {
+      out.add([id, false]);
+    }
+  }
   final tabs = c['tabs'];
   if (tabs is List) {
     for (final tab in (tabs as List)) {
@@ -109,7 +131,7 @@ List treeOf(Map app, String picked) {
         'icon': 'component:' + type,
         'depth': depth,
         'caption': top[2] == true ? id + ' · por item' : id,
-        'tone': id == picked ? 'accent' : 'muted',
+        'selected': id == picked,
       });
       final next = refsOf(c);
       for (var i = next.length - 1; i >= 0; i--) {
@@ -190,8 +212,10 @@ List pickedRowsOf(Map app, String id) {
     if (m['id'] == id) {
     rows.add({'name': 'id', 'value': id});
     rows.add({'name': 'tipo', 'value': kindName(m['component'] as String)});
-    for (final key in ['text', 'label', 'value', 'name', 'url', 'app']) {
-      if (m[key] != null) rows.add({'name': key, 'value': shown(m[key])});
+    for (final key in ['title', 'text', 'label', 'subtitle', 'value', 'name', 'icon', 'url', 'app', 'variant']) {
+      if (m[key] != null && m[key] != '') {
+          rows.add({'name': key, 'value': shown(m[key])});
+        }
     }
     final children = m['children'];
     if (children is List) {
@@ -279,6 +303,7 @@ const ACTIONS: Record<string, ActionDef> = {
   out.add(set('/focus', '')[0]);
   out.add(set('/picking', false)[0]);
   out.add(set('/pickLabel', 'Escolher')[0]);
+  out.add(set('/pickVariant', 'default')[0]);
   for (final op in viewsOf(app, history, '')) {
     out.add(op);
   }
@@ -358,6 +383,7 @@ const ACTIONS: Record<string, ActionDef> = {
     set('/viewingLabel', 'Vendo a versão $n')[0],
     set('/picking', false)[0],
     set('/pickLabel', 'Escolher')[0],
+    set('/pickVariant', 'default')[0],
     set('/tab', 'App')[0],
   ];`,
   ),
@@ -373,6 +399,7 @@ const ACTIONS: Record<string, ActionDef> = {
   return [
     set('/picking', on)[0],
     set('/pickLabel', on ? 'Pronto' : 'Escolher')[0],
+    set('/pickVariant', on ? 'primary' : 'default')[0],
   ];`,
   ),
   // A component picked in the Surface, or a row of the tree.
@@ -381,8 +408,15 @@ const ACTIONS: Record<string, ActionDef> = {
     ['/app'],
     `  final id = (event['componentId'] as String?) ?? '';
   final app = input['/app'] as Map;
+  var type = '';
+  for (final c in (app['ui'] as List)) {
+    final m = c as Map;
+    if (m['id'] == id) type = m['component'] as String;
+  }
   return [
     set('/picked', id)[0],
+    set('/pickedTitle', kindName(type) + ' · ' + id)[0],
+    set('/pickedIcon', 'component:' + type)[0],
     set('/pickedRows', pickedRowsOf(app, id))[0],
     set('/tree', treeOf(app, id))[0],
   ];`,
@@ -398,6 +432,7 @@ const ACTIONS: Record<string, ActionDef> = {
     set('/focusLabel', 'Sobre: ' + subject)[0],
     set('/picking', false)[0],
     set('/pickLabel', 'Escolher')[0],
+    set('/pickVariant', 'default')[0],
     set('/tab', 'Conversa')[0],
   ];`,
   ),
@@ -417,29 +452,45 @@ const send = {
 };
 
 const UI: Component[] = [
+  // The frame: the edited app's name over everything; three panes on a
+  // wide window, one page at a time (and a bottom navigation) otherwise.
   {
     id: 'root',
-    component: 'Column',
-    children: ['header', 'form', 'viewingBar', 'opening', 'wide', 'narrow'],
-  },
-
-  // The app's name, its form, and picking.
-  {
-    id: 'header',
-    component: 'Row',
-    children: ['title', 'pickButton'],
+    component: 'Screen',
+    header: 'topBar',
+    body: 'layout',
+    nav: 'mobileNav',
   },
   {
-    id: 'title',
-    component: 'Text',
-    text: { path: '/title' },
-    variant: 'h3',
-    weight: 1,
+    id: 'topBar',
+    component: 'TopBar',
+    title: { path: '/title' },
+    subtitle: 'My Own App Editor',
+    leading: 'mark',
+    trailing: ['form', 'pickTools'],
+  },
+  {
+    id: 'mark',
+    component: 'Box',
+    visible: { path: '/$viewport/size', is: 'expanded' },
+    shape: 'rounded',
+    radius: 'md',
+    background: 'accentSoft',
+    padding: 'sm',
+    child: 'markIcon',
+  },
+  {
+    id: 'markIcon',
+    component: 'Icon',
+    name: 'layout',
+    tone: 'accent',
+    size: 'sm',
   },
   {
     id: 'form',
     component: 'ChoicePicker',
     variant: 'mutuallyExclusive',
+    style: 'segmented',
     options: [
       { label: 'Celular', value: 'mobile' },
       { label: 'Web', value: 'web' },
@@ -449,115 +500,85 @@ const UI: Component[] = [
       event: { name: 'set_form', context: { id: { path: '/editing' } } },
     },
   },
+  // Picking: hidden while a version is looked at; an icon alone on a phone.
+  {
+    id: 'pickTools',
+    component: 'Row',
+    gap: 'none',
+    visible: { path: '/viewingOn', is: false },
+    children: ['pickButton', 'pickIcon'],
+  },
   {
     id: 'pickButton',
     component: 'Button',
     icon: 'cursor',
     label: { path: '/pickLabel' },
-    visible: { path: '/viewingOn', is: false },
+    variant: { path: '/pickVariant' },
+    visible: { path: '/$viewport/size', is: 'expanded' },
     action: { event: { name: 'toggle_picking' } },
   },
   {
-    id: 'opening',
-    component: 'Text',
-    text: 'Abrindo…',
-    tone: 'muted',
-    visible: { path: '/$pending/start' },
-  },
-
-  // Looking at an earlier version.
-  {
-    id: 'viewingBar',
-    component: 'Card',
-    child: 'viewingRow',
-    visible: { path: '/viewingOn' },
-  },
-  {
-    id: 'viewingRow',
-    component: 'Row',
-    children: ['viewingText', 'backButton', 'restoreButton'],
-  },
-  {
-    id: 'viewingText',
-    component: 'Text',
-    text: { path: '/viewingLabel' },
-  },
-  {
-    id: 'backButton',
+    id: 'pickIcon',
     component: 'Button',
-    label: 'Voltar à atual',
-    variant: 'borderless',
-    action: { event: { name: 'back' } },
+    icon: 'cursor',
+    label: '',
+    variant: { path: '/pickVariant' },
+    visible: { path: '/$viewport/size', is: 'expanded', not: true },
+    action: { event: { name: 'toggle_picking' } },
   },
   {
-    id: 'restoreButton',
-    component: 'Button',
-    label: 'Restaurar esta',
-    icon: 'restore',
-    variant: 'primary',
-    action: {
-      event: {
-        name: 'restore',
-        context: { id: { path: '/editing' }, n: { path: '/viewing' } },
-      },
+    id: 'mobileNav',
+    component: 'NavBar',
+    visible: { path: '/$viewport/size', is: 'expanded', not: true },
+    value: { path: '/tab' },
+    items: [
+      { label: 'App', icon: 'visible', value: 'App' },
+      { label: 'Conversa', icon: 'assistant', value: 'Conversa' },
+      { label: 'Componentes', icon: 'tree', value: 'Componentes' },
+      { label: 'Versões', icon: 'version', value: 'Versões' },
+    ],
+  },
+  {
+    id: 'layout',
+    component: 'Pages',
+    current: { path: '/$viewport/size' },
+    pages: { expanded: 'wide', medium: 'narrow', compact: 'narrow' },
+  },
+  {
+    id: 'wide',
+    component: 'Split',
+    children: ['chatPanel', 'previewPanel', 'inspectorPanel'],
+  },
+  {
+    id: 'narrow',
+    component: 'Pages',
+    current: { path: '/tab' },
+    pages: {
+      App: 'previewPanel',
+      Conversa: 'chatPanel',
+      Componentes: 'treePanel',
+      Versões: 'versionsPanel',
     },
   },
 
-  // A wide window: conversation · app · components, side by side.
+  // The conversation: one bubble per turn, the request on its way, and the
+  // composer pinned under them.
   {
-    id: 'wide',
-    component: 'Row',
-    align: 'start',
-    visible: { path: '/$viewport/size', is: 'expanded' },
-    children: ['side', 'surface', 'inspector'],
+    id: 'chatPanel',
+    component: 'Panel',
+    title: 'Conversa',
+    icon: 'assistant',
+    width: 'lg',
+    background: 'surface',
+    children: ['opening', 'turns', 'sending', 'thinking'],
+    footer: 'composer',
   },
   {
-    id: 'side',
-    component: 'Tabs',
-    weight: 3,
-    value: { path: '/sideTab' },
-    tabs: [
-      { title: 'Conversa', child: 'chat' },
-      { title: 'Versões', child: 'versions' },
-    ],
-  },
-  {
-    id: 'surface',
-    component: 'Surface',
-    weight: 5,
-    app: { path: '/editing' },
-    version: { path: '/viewing' },
-    revision: { path: '/revision' },
-    picking: { path: '/picking' },
-    selected: { path: '/picked' },
-    action: { event: { name: 'pick' } },
-  },
-  {
-    id: 'inspector',
-    component: 'Column',
-    weight: 3,
-    children: ['treeTitle', 'tree', 'pickedDivider', 'picked'],
-  },
-
-  // Anything narrower: one tab at a time.
-  {
-    id: 'narrow',
-    component: 'Tabs',
-    visible: { path: '/$viewport/size', is: 'expanded', not: true },
-    value: { path: '/tab' },
-    tabs: [
-      { title: 'App', child: 'surface' },
-      { title: 'Conversa', child: 'chat' },
-      { title: 'Componentes', child: 'inspector' },
-      { title: 'Versões', child: 'versions' },
-    ],
-  },
-
-  // The conversation: one bubble per turn, the request on its way, the field.
-  {
-    id: 'chat',
-    component: 'Column',
-    children: ['turns', 'sending', 'thinking', 'focusRow', 'composer'],
+    id: 'opening',
+    component: 'Message',
+    role: 'system',
+    text: 'Abrindo…',
+    visible: { path: '/$pending/start' },
   },
   {
     id: 'turns',
@@ -586,14 +607,22 @@ const UI: Component[] = [
     visible: { path: '/$pending/send' },
   },
   {
+    id: 'composer',
+    component: 'Column',
+    gap: 'sm',
+    children: ['focusRow', 'composerRow'],
+  },
+  {
     id: 'focusRow',
     component: 'Row',
+    gap: 'xs',
     visible: { path: '/focus' },
-    children: ['focusBadge', 'focusClear'],
+    children: ['focusBadge', 'focusClear', 'focusRest'],
   },
   {
     id: 'focusBadge',
     component: 'Badge',
+    icon: 'cursor',
     text: { path: '/focusLabel' },
     tone: 'accent',
   },
@@ -605,15 +634,17 @@ const UI: Component[] = [
     variant: 'borderless',
     action: { event: { name: 'clear_focus' } },
   },
+  { id: 'focusRest', component: 'Spacer' },
   {
-    id: 'composer',
+    id: 'composerRow',
     component: 'Row',
+    gap: 'sm',
     children: ['draft', 'sendButton'],
   },
   {
     id: 'draft',
     component: 'TextField',
-    label: 'Peça uma mudança',
+    label: 'Peça uma mudança…',
     value: { path: '/draft' },
     action: send,
   },
@@ -626,109 +657,165 @@ const UI: Component[] = [
     action: send,
   },
 
-  // The versions, newest first.
+  // The app, running (or a version of it, looked at).
   {
-    id: 'versions',
-    component: 'List',
-    children: { componentId: 'versionRow', path: '/versionRows' },
+    id: 'previewPanel',
+    component: 'Panel',
+    title: 'Prévia',
+    icon: 'visible',
+    trailing: ['viewingBadge'],
+    scroll: false,
+    padding: 'xl',
+    child: 'surface',
+    footer: 'viewingBar',
   },
   {
-    id: 'versionRow',
-    component: 'Card',
-    child: 'versionLine',
-    action: { event: { name: 'view', context: { n: { path: 'n' } } } },
-  },
-  {
-    id: 'versionLine',
-    component: 'Column',
-    children: ['versionHead', 'versionCaption'],
-  },
-  {
-    id: 'versionHead',
-    component: 'Row',
-    children: ['versionIcon', 'versionLabel', 'versionCurrent'],
-  },
-  { id: 'versionIcon', component: 'Icon', name: 'version' },
-  {
-    id: 'versionLabel',
-    component: 'Text',
-    text: { path: 'label' },
-  },
-  {
-    id: 'versionCurrent',
+    id: 'viewingBadge',
     component: 'Badge',
-    text: 'atual',
-    tone: 'accent',
-    visible: { path: 'current' },
+    icon: 'version',
+    text: { path: '/viewingLabel' },
+    tone: 'warning',
+    visible: { path: '/viewingOn' },
   },
   {
-    id: 'versionCaption',
-    component: 'Text',
-    text: { path: 'caption' },
-    variant: 'caption',
-    visible: { path: 'caption' },
+    id: 'surface',
+    component: 'Surface',
+    app: { path: '/editing' },
+    version: { path: '/viewing' },
+    revision: { path: '/revision' },
+    picking: { path: '/picking' },
+    selected: { path: '/picked' },
+    action: { event: { name: 'pick' } },
+  },
+  {
+    id: 'viewingBar',
+    component: 'Callout',
+    tone: 'warning',
+    icon: 'version',
+    title: { path: '/viewingLabel' },
+    text: 'Só para ver: as mudanças vão na versão atual.',
+    visible: { path: '/viewingOn' },
+    trailing: ['backButton', 'restoreButton'],
+  },
+  {
+    id: 'backButton',
+    component: 'Button',
+    label: 'Voltar à atual',
+    variant: 'borderless',
+    action: { event: { name: 'back' } },
+  },
+  {
+    id: 'restoreButton',
+    component: 'Button',
+    label: 'Restaurar esta',
+    icon: 'restore',
+    variant: 'primary',
+    action: {
+      event: {
+        name: 'restore',
+        context: { id: { path: '/editing' }, n: { path: '/viewing' } },
+      },
+    },
   },
 
-  // The components: the tree, and the picked one's menu.
+  // The components and the versions: side by side with the app on a wide
+  // window, a page each otherwise.
   {
-    id: 'treeTitle',
-    component: 'Text',
-    text: 'Componentes',
-    variant: 'h3',
+    id: 'inspectorPanel',
+    component: 'Panel',
+    width: 'md',
+    background: 'surface',
+    child: 'inspectorTabs',
+  },
+  {
+    id: 'inspectorTabs',
+    component: 'Tabs',
+    value: { path: '/inspectorTab' },
+    tabs: [
+      { title: 'Componentes', icon: 'tree', child: 'inspector' },
+      { title: 'Versões', icon: 'version', child: 'versions' },
+    ],
+  },
+  {
+    id: 'treePanel',
+    component: 'Panel',
+    title: 'Componentes',
+    icon: 'tree',
+    child: 'inspector',
+  },
+  {
+    id: 'versionsPanel',
+    component: 'Panel',
+    title: 'Versões',
+    icon: 'version',
+    child: 'versions',
+  },
+  {
+    id: 'inspector',
+    component: 'Column',
+    gap: 'lg',
+    children: ['tree', 'picked'],
   },
   {
     id: 'tree',
     component: 'List',
+    gap: 'none',
     children: { componentId: 'treeRow', path: '/tree' },
   },
   {
     id: 'treeRow',
-    component: 'Row',
+    component: 'ListItem',
+    dense: true,
     inset: { path: 'depth' },
-    children: ['treeIcon', 'treeLabel', 'treeId'],
+    icon: { path: 'icon' },
+    title: { path: 'label' },
+    meta: { path: 'caption' },
+    selected: { path: 'selected' },
     action: {
       event: { name: 'pick', context: { componentId: { path: 'id' } } },
     },
   },
   {
-    id: 'treeIcon',
-    component: 'Icon',
-    name: { path: 'icon' },
-    tone: { path: 'tone' },
-  },
-  {
-    id: 'treeLabel',
-    component: 'Text',
-    text: { path: 'label' },
-    tone: { path: 'tone' },
-    weight: 2,
-  },
-  {
-    id: 'treeId',
-    component: 'Text',
-    text: { path: 'caption' },
-    variant: 'caption',
-    weight: 2,
-  },
-  {
-    id: 'pickedDivider',
-    component: 'Divider',
-    visible: { path: '/picked' },
-  },
-  {
     id: 'picked',
-    component: 'Column',
+    component: 'Box',
     visible: { path: '/picked' },
-    children: ['pickedRows', 'askButton'],
+    background: 'bg',
+    border: true,
+    padding: 'lg',
+    gap: 'md',
+    children: ['pickedHead', 'pickedRows', 'askButton'],
+  },
+  {
+    id: 'pickedHead',
+    component: 'Row',
+    gap: 'sm',
+    children: ['pickedIcon', 'pickedTitle'],
+  },
+  {
+    id: 'pickedIcon',
+    component: 'Icon',
+    name: { path: '/pickedIcon' },
+    tone: 'accent',
+    size: 'sm',
+  },
+  {
+    id: 'pickedTitle',
+    component: 'Text',
+    text: { path: '/pickedTitle' },
+    variant: 'strong',
+    maxLines: 1,
   },
   {
     id: 'pickedRows',
     component: 'List',
+    divided: true,
     children: { componentId: 'pickedRow', path: '/pickedRows' },
   },
   {
     id: 'pickedRow',
     component: 'Row',
+    padding: 'sm',
+    align: 'start',
     children: ['pickedName', 'pickedValue'],
   },
   {
@@ -736,20 +823,47 @@ const UI: Component[] = [
     component: 'Text',
     text: { path: 'name' },
     variant: 'caption',
-    weight: 1,
+    width: 72,
   },
   {
     id: 'pickedValue',
     component: 'Text',
     text: { path: 'value' },
-    weight: 3,
+    variant: 'label',
+    tone: 'muted',
   },
   {
     id: 'askButton',
     component: 'Button',
     label: 'Pedir mudança',
+    icon: 'assistant',
     variant: 'primary',
+    width: 'fill',
     action: { event: { name: 'ask_change' } },
+  },
+
+  // The versions, newest first.
+  {
+    id: 'versions',
+    component: 'List',
+    gap: 'xs',
+    children: { componentId: 'versionRow', path: '/versionRows' },
+  },
+  {
+    id: 'versionRow',
+    component: 'ListItem',
+    icon: 'version',
+    title: { path: 'label' },
+    subtitle: { path: 'caption' },
+    trailing: ['versionCurrent'],
+    action: { event: { name: 'view', context: { n: { path: 'n' } } } },
+  },
+  {
+    id: 'versionCurrent',
+    component: 'Badge',
+    text: 'atual',
+    tone: 'accent',
+    visible: { path: 'current' },
   },
 ];
 
@@ -772,13 +886,17 @@ export const EDITOR: Bundle = {
     focusLabel: '',
     picking: false,
     pickLabel: 'Escolher',
+    pickVariant: 'default',
+    pickedTitle: '',
+    pickedIcon: 'component',
     viewing: null,
     viewingOn: false,
     viewingLabel: '',
     draft: '',
     revision: 0,
     tab: 'App',
-    sideTab: 'Conversa',
+    inspectorTab: 'Componentes',
+    editorVersion: EDITOR_VERSION,
   },
   actions: ACTIONS,
 };

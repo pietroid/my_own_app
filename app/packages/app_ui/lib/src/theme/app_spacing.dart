@@ -40,6 +40,12 @@ abstract final class AppSpacing {
   /// The corner radius of a button and a small control.
   static const buttonRadius = 4.0;
 
+  /// The corner radius of a chat bubble and a large tile.
+  static const bubbleRadius = 16.0;
+
+  /// The tight corner of a chat bubble, on the speaker's side.
+  static const bubbleTail = 4.0;
+
   /// A fully rounded corner, for pills and tap targets.
   static const pillRadius = 999.0;
 
@@ -114,6 +120,51 @@ abstract final class AppSpacing {
 
   /// How much of the width a chat bubble may take.
   static const messageWidthFactor = 0.8;
+
+  /// The height of a built app's top bar (`TopBar`).
+  static const topBarHeight = 56.0;
+
+  /// The height of a built app's bottom navigation (`NavBar`).
+  static const navBarHeight = 64.0;
+
+  /// An icon in a built app's bottom navigation.
+  static const navIcon = 20.0;
+
+  /// The width of a built app's side navigation (`NavBar`, side).
+  static const sideNavWidth = 240.0;
+
+  /// The height of a panel's header (`Panel`).
+  static const panelHeaderHeight = 48.0;
+
+  /// A small side pane of a `Split`.
+  static const paneSmall = 240.0;
+
+  /// A medium side pane of a `Split`.
+  static const paneMedium = 320.0;
+
+  /// A large side pane of a `Split`.
+  static const paneLarge = 380.0;
+
+  /// The square tile an icon sits on at the start of a `ListItem`.
+  static const iconTile = 36.0;
+
+  /// A small avatar.
+  static const avatarSmall = 28.0;
+
+  /// A large avatar.
+  static const avatarLarge = 56.0;
+
+  /// The thickness of a progress bar.
+  static const progressHeight = 6.0;
+
+  /// An icon drawn large: an empty state's.
+  static const iconLarge = 32.0;
+
+  /// The height of the tag that names a component being picked.
+  static const selectionTag = 18.0;
+
+  /// The icon inside that tag.
+  static const selectionTagIcon = 12.0;
 
   /// The share of the screen a built app's sheet (Modal) may cover.
   static const sheetHeightFactor = 0.85;

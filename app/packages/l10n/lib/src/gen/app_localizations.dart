@@ -256,6 +256,18 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Web'**
   String get appsFormWeb;
+
+  /// No description provided for @appsEnginePlaceholderTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'O motor do app'**
+  String get appsEnginePlaceholderTitle;
+
+  /// No description provided for @appsEnginePlaceholderBody.
+  ///
+  /// In pt, this message translates to:
+  /// **'Aqui roda o app que este editor está editando.'**
+  String get appsEnginePlaceholderBody;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

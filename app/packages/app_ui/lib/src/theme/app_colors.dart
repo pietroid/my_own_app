@@ -43,11 +43,26 @@ abstract final class AppColors {
   /// A dark [accent], behind something selected or the person's own words.
   static const accentSoft = Color(0xFF3A2219);
 
+  /// A translucent [accent]: what is under the pointer while picking.
+  static const accentHalo = Color(0x33FF7438);
+
   /// Something went well.
   static const positive = Color(0xFF4ADE80);
 
+  /// A dark [positive], behind a good state (a soft badge, a callout).
+  static const positiveSoft = Color(0xFF15301F);
+
   /// Something went wrong.
   static const negative = Color(0xFFF87171);
+
+  /// A dark [negative], behind a bad state.
+  static const negativeSoft = Color(0xFF3A1C1C);
+
+  /// Something needs a look: neither good nor wrong.
+  static const warning = Color(0xFFFBBF24);
+
+  /// A dark [warning], behind it.
+  static const warningSoft = Color(0xFF362B10);
 
   /// The glass of a drawn phone where nothing lights it: the island.
   static const device = Color(0xFF000000);

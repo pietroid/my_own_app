@@ -7,17 +7,31 @@ extension on _Render {
   Widget field(Map<String, dynamic> c, _Scope scope) {
     final path = scope.resolve(_Render.pathOf(c['value']));
     final variant = c['variant'];
-    return _Field(
+    final title = string(c['title'], scope);
+    final field = _Field(
       key: ValueKey('field:$path'),
       label: string(c['label'], scope),
       value: string(c['value'], scope),
       long: variant == 'longText',
       number: variant == 'number',
       obscured: variant == 'obscured',
+      search: variant == 'search',
+      icon:
+          AppIcons.named[string(c['icon'], scope)] ??
+          (variant == 'search' ? AppIcons.named['search'] : null),
       onChanged: (text) => edit(c['value'], scope, text),
       onSubmitted: hasAction(c) && variant != 'longText'
           ? () => fire(c, scope)
           : null,
+    );
+    if (title.isEmpty) return field;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AppSpacing.s1,
+      children: [
+        Text(title, style: AppTypography.labelStrong),
+        field,
+      ],
     );
   }
 
@@ -59,6 +73,38 @@ extension on _Render {
     final chosen = [...?(value(c['value'], scope) as List?)];
     final single = c['variant'] != 'multipleSelection';
     final label = string(c['label'], scope);
+    void pick(Object? option) {
+      final has = chosen.contains(option);
+      final next = single
+          ? [option]
+          : has
+          ? [...chosen.where((v) => v != option)]
+          : [...chosen, option];
+      change(c, scope, next);
+    }
+
+    if (value(c['style'], scope) == 'segmented') {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.s1 / 2),
+        decoration: const BoxDecoration(
+          color: AppColors.fill,
+          borderRadius: BorderRadius.all(
+            Radius.circular(AppSpacing.chipRadius),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in options)
+              _Segment(
+                label: option.label,
+                chosen: chosen.contains(option.value),
+                onTap: () => pick(option.value),
+              ),
+          ],
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: AppSpacing.s2,
@@ -72,15 +118,7 @@ extension on _Render {
               _Chip(
                 label: option.label,
                 chosen: chosen.contains(option.value),
-                onTap: () {
-                  final has = chosen.contains(option.value);
-                  final next = single
-                      ? [option.value]
-                      : has
-                      ? [...chosen.where((v) => v != option.value)]
-                      : [...chosen, option.value];
-                  change(c, scope, next);
-                },
+                onTap: () => pick(option.value),
               ),
           ],
         ),
@@ -177,29 +215,59 @@ extension on _Render {
   }
 
   Widget button(Map<String, dynamic> c, _Scope scope) {
-    final onPressed = hasAction(c) ? () => fire(c, scope) : null;
+    // While picking, a button keeps its enabled look (the picker takes its
+    // taps before it does).
+    final onPressed = hasAction(c)
+        ? () => fire(c, scope)
+        : picking && (c['action'] as Map?)?['event'] != null
+        ? () {}
+        : null;
     final label = string(c['label'], scope);
     final icon = AppIcons.named[string(c['icon'], scope)];
-    final variant = switch (c['variant']) {
-      'primary' => AppButtonVariant.primary,
+    final kind = value(c['variant'], scope);
+    final variant = switch (kind) {
+      'primary' || 'danger' => AppButtonVariant.primary,
       'borderless' => AppButtonVariant.tertiary,
       _ => AppButtonVariant.secondary,
     };
+    final color = kind == 'danger' ? AppColors.negative : AppColors.accent;
+    final expand = c['width'] == 'fill';
     if (label.isEmpty && icon != null) {
+      // An icon alone: filled when it is the main thing (send), plain
+      // otherwise (close, more).
+      final filled = variant == AppButtonVariant.primary;
       return IconButton(
         onPressed: onPressed,
+        style: filled
+            ? IconButton.styleFrom(
+                backgroundColor: color,
+                disabledBackgroundColor: AppColors.fillStrong,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(AppSpacing.chipRadius),
+                  ),
+                ),
+              )
+            : null,
         icon: AppIcon(
           iconData: icon,
-          color: variant == AppButtonVariant.primary
-              ? AppColors.accent
-              : AppColors.ink2,
+          size: AppSpacing.navIcon,
+          color: filled ? AppColors.onAccent : AppColors.ink2,
         ),
       );
     }
     return icon == null
-        ? AppButton(variant: variant, text: label, onPressed: onPressed)
+        ? AppButton(
+            variant: variant,
+            color: color,
+            expand: expand,
+            text: label,
+            onPressed: onPressed,
+          )
         : AppButton.icon(
             variant: variant,
+            color: color,
+            expand: expand,
             icon: AppIcon(iconData: icon, size: AppSpacing.iconSmall),
             text: label,
             onPressed: onPressed,
@@ -214,6 +282,8 @@ class _Field extends StatefulWidget {
     required this.long,
     required this.number,
     required this.obscured,
+    required this.search,
+    required this.icon,
     required this.onChanged,
     required this.onSubmitted,
     super.key,
@@ -224,6 +294,8 @@ class _Field extends StatefulWidget {
   final bool long;
   final bool number;
   final bool obscured;
+  final bool search;
+  final AppIconData? icon;
   final ValueChanged<String> onChanged;
   final VoidCallback? onSubmitted;
 
@@ -264,7 +336,66 @@ class _FieldState extends State<_Field> {
           ? TextInputType.number
           : TextInputType.text,
       textInputAction: submit == null ? null : TextInputAction.send,
-      decoration: InputDecoration(hintText: widget.label),
+      decoration: InputDecoration(
+        hintText: widget.label,
+        prefixIcon: widget.icon == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+                child: AppIcon(
+                  iconData: widget.icon!,
+                  size: AppSpacing.iconSmall,
+                  color: AppColors.ink3,
+                ),
+              ),
+        prefixIconConstraints: const BoxConstraints(),
+        border: widget.search
+            ? const OutlineInputBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(AppSpacing.pillRadius),
+                ),
+                borderSide: BorderSide.none,
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+/// One option of a segmented control: raised when it is the chosen one.
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.label,
+    required this.chosen,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool chosen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(AppSpacing.buttonRadius));
+    return Material(
+      color: chosen ? AppColors.fillStrong : Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.s3,
+            vertical: AppSpacing.s1,
+          ),
+          child: Text(
+            label,
+            style: AppTypography.labelStrong.copyWith(
+              color: chosen ? AppColors.ink : AppColors.ink2,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

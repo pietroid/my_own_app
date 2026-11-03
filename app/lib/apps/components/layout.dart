@@ -2,34 +2,54 @@ part of '../app_renderer.dart';
 
 /// Column, Row, List, Card, Tabs, Pages and Modal: what holds the rest.
 extension on _Render {
-  Widget column(Map<String, dynamic> c, _Scope scope, int depth) => _tappable(
-    c,
-    scope,
-    Column(
-      mainAxisAlignment: _justify(c['justify']),
-      crossAxisAlignment: _align(c['align'], CrossAxisAlignment.stretch),
-      spacing: AppSpacing.s3,
-      children: children(c, scope, depth),
-    ),
-  );
+  Widget column(Map<String, dynamic> c, _Scope scope, int depth) =>
+      _tappable(c, scope, flow(c, scope, depth, horizontal: false));
 
-  Widget row(Map<String, dynamic> c, _Scope scope, int depth) => _tappable(
-    c,
-    scope,
-    Row(
+  Widget row(Map<String, dynamic> c, _Scope scope, int depth) =>
+      _tappable(c, scope, flow(c, scope, depth, horizontal: true));
+
+  /// [c]'s children one after another, `gap` apart (default `md`): side by
+  /// side when [horizontal] (sharing the width, unless `wrap` lets them
+  /// run onto more lines), or one under the other.
+  Widget flow(
+    Map<String, dynamic> c,
+    _Scope scope,
+    int depth, {
+    required bool horizontal,
+  }) {
+    final gap = step(c['gap'], scope) ?? AppSpacing.s3;
+    final items = children(c, scope, depth);
+    if (!horizontal) {
+      return Column(
+        mainAxisAlignment: _justify(c['justify']),
+        crossAxisAlignment: _align(c['align'], CrossAxisAlignment.stretch),
+        spacing: gap,
+        children: items,
+      );
+    }
+    if (value(c['wrap'], scope) == true) {
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: items,
+      );
+    }
+    return Row(
       mainAxisAlignment: _justify(c['justify']),
       crossAxisAlignment: _align(c['align'], CrossAxisAlignment.center),
-      spacing: AppSpacing.s3,
+      spacing: gap,
       children: [
-        for (final child in children(c, scope, depth))
+        for (final child in items)
           switch (child) {
             _Fixed() => child,
+            _Grow() => Expanded(child: child),
             _Weighted(:final flex) => Expanded(flex: flex, child: child),
             _ => Expanded(child: child),
           },
       ],
-    ),
-  );
+    );
+  }
 
   /// A Row or Column with an action is tapped whole (a row of a list).
   Widget _tappable(Map<String, dynamic> c, _Scope scope, Widget child) {
@@ -48,18 +68,26 @@ extension on _Render {
 
   Widget list(Map<String, dynamic> c, _Scope scope, int depth) {
     final items = children(c, scope, depth);
+    final gap = step(c['gap'], scope) ?? AppSpacing.s3;
     if (c['direction'] != 'horizontal') {
+      // `divided`: a hairline between rows, as in a settings list.
+      final divided = value(c['divided'], scope) == true;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: AppSpacing.s3,
-        children: items,
+        spacing: divided ? 0 : gap,
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (divided && i > 0) const Divider(height: AppSpacing.hairline),
+            items[i],
+          ],
+        ],
       );
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: AppSpacing.s3,
+        spacing: gap,
         children: [
           for (final item in items)
             SizedBox(width: AppSpacing.stripItemWidth, child: item),
@@ -68,20 +96,41 @@ extension on _Render {
     );
   }
 
+  /// A raised surface around one `child`. `variant`: `outlined` (the
+  /// default: a hairline), `filled` (a fill, no edge) or `accent` (the
+  /// accent's soft colour, for the one thing that matters). `padding`
+  /// (default `lg`), `background` and `radius` as any box.
   Widget card(Map<String, dynamic> c, _Scope scope, int depth) {
     final child = c['child'];
-    const shape = RoundedRectangleBorder(
-      side: BorderSide(color: AppColors.line),
-      borderRadius: BorderRadius.all(Radius.circular(AppSpacing.cardRadius)),
+    final variant = value(c['variant'], scope);
+    final background =
+        paint(c['background'], scope) ??
+        switch (variant) {
+          'filled' => AppColors.fill,
+          'accent' => AppColors.accentSoft,
+          _ => AppColors.surface,
+        };
+    final border =
+        edge(c['border'], scope) ??
+        switch (variant) {
+          'filled' => null,
+          'accent' => AppColors.accent,
+          _ => AppColors.line,
+        };
+    final shape = RoundedRectangleBorder(
+      side: border == null ? BorderSide.none : BorderSide(color: border),
+      borderRadius: BorderRadius.all(
+        Radius.circular(corner(c['radius'], scope) ?? AppSpacing.cardRadius),
+      ),
     );
     return Material(
-      color: AppColors.surface,
+      color: background,
       shape: shape,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: hasAction(c) ? () => fire(c, scope) : null,
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.s4),
+          padding: EdgeInsets.all(step(c['padding'], scope) ?? AppSpacing.s4),
           child: child is String
               ? build(child, scope, depth + 1)
               : const SizedBox.shrink(),
@@ -98,6 +147,10 @@ extension on _Render {
     if (tabs.isEmpty) return const SizedBox.shrink();
     return _Tabs(
       titles: [for (final tab in tabs) string(tab['title'], scope)],
+      icons: [
+        for (final tab in tabs) AppIcons.named[string(tab['icon'], scope)],
+      ],
+      pills: value(c['variant'], scope) == 'pills',
       bound: c.containsKey('value') ? string(c['value'], scope) : null,
       onPick: (title) => edit(c['value'], scope, title),
       builder: (i) => build(tabs[i]['child'] as String, scope, depth + 1),
@@ -146,12 +199,18 @@ extension on _Render {
 class _Tabs extends StatefulWidget {
   const _Tabs({
     required this.titles,
+    required this.icons,
+    required this.pills,
     required this.bound,
     required this.onPick,
     required this.builder,
   });
 
   final List<String> titles;
+  final List<AppIconData?> icons;
+
+  /// Pills instead of the usual underlined strip.
+  final bool pills;
   final String? bound;
   final ValueChanged<String> onPick;
   final Widget Function(int index) builder;
@@ -170,6 +229,11 @@ class _TabsState extends State<_Tabs> {
     return _own.clamp(0, widget.titles.length - 1);
   }
 
+  void _pick(int i) {
+    setState(() => _own = i);
+    widget.onPick(widget.titles[i]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final open = _open;
@@ -177,20 +241,39 @@ class _TabsState extends State<_Tabs> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AppSpacing.s3,
       children: [
-        Row(
-          spacing: AppSpacing.s2,
-          children: [
-            for (var i = 0; i < widget.titles.length; i++)
-              _Chip(
-                label: widget.titles[i],
-                chosen: i == open,
-                onTap: () {
-                  setState(() => _own = i);
-                  widget.onPick(widget.titles[i]);
-                },
+        if (widget.pills)
+          Wrap(
+            spacing: AppSpacing.s2,
+            runSpacing: AppSpacing.s2,
+            children: [
+              for (var i = 0; i < widget.titles.length; i++)
+                _Chip(
+                  label: widget.titles[i],
+                  chosen: i == open,
+                  onTap: () => _pick(i),
+                ),
+            ],
+          )
+        else
+          DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.line)),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < widget.titles.length; i++)
+                    _Tab(
+                      label: widget.titles[i],
+                      icon: widget.icons[i],
+                      chosen: i == open,
+                      onTap: () => _pick(i),
+                    ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
         widget.builder(open),
       ],
     );
@@ -303,6 +386,52 @@ class _Chip extends StatelessWidget {
               color: chosen ? AppColors.accent : AppColors.ink,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tab of an underlined strip: the open one in the accent, underlined.
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.label,
+    required this.icon,
+    required this.chosen,
+    required this.onTap,
+  });
+
+  final String label;
+  final AppIconData? icon;
+  final bool chosen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = chosen ? AppColors.ink : AppColors.ink2;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s3,
+          vertical: AppSpacing.s3,
+        ),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: chosen ? AppColors.accent : Colors.transparent,
+              width: AppSpacing.selectionOutline,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: AppSpacing.s2,
+          children: [
+            if (icon case final icon?)
+              AppIcon(iconData: icon, size: AppSpacing.iconSmall, color: ink),
+            Text(label, style: AppTypography.labelStrong.copyWith(color: ink)),
+          ],
         ),
       ),
     );

@@ -53,7 +53,7 @@ void main() {
       source.indexOf('] as const', source.indexOf('export const COMPONENTS')),
     );
     final names = RegExp("'([A-Za-z]+)'").allMatches(list).map((m) => m[1]);
-    expect(names, hasLength(21));
+    expect(names, hasLength(35));
     for (final name in names) {
       expect(AppIcons.components, contains(name));
     }

@@ -93,4 +93,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get appsFormWeb => 'Web';
+
+  @override
+  String get appsEnginePlaceholderTitle => 'O motor do app';
+
+  @override
+  String get appsEnginePlaceholderBody => 'Aqui roda o app que este editor está editando.';
 }

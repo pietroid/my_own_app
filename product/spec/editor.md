@@ -28,18 +28,36 @@ model. Spec: `editor.spec.ts`.
 | Piece | Components | Actions |
 |-------|-----------|---------|
 | The app, running | `Surface` (`app /editing`, `version /viewing`, `revision /revision`, `picking /picking`, `selected /picked`) | `pick` (client) |
-| Celular / Web | `ChoicePicker` on `/formChoice` | `set_form` (platform: `apps.setForm`) |
+| Celular / Web | `ChoicePicker` (`style: segmented`) on `/formChoice`, in the `TopBar` | `set_form` (platform: `apps.setForm`) |
 | Conversation | `List` of `Message` over `/turns`; `/$pending/send` shows the request and "Pensando…" while it runs; `TextField` + `Button` | `send` (platform: `apps.send`, `apps.history`) |
 | Focus | `Badge` "Sobre: id", close `Button` | `ask_change`, `clear_focus` (client) |
-| Versions | `List` of `Card` over `/versionRows`; a viewing bar | `view`, `back` (client), `restore` (platform) |
-| Components | `List` of tappable `Row` over `/tree` (`inset` = depth, `Icon component:<Type>`), the picked component's rows | `pick`, `toggle_picking` (client) |
-| Layout | `expanded` (`/$viewport/size`): a Row of three; otherwise `Tabs` App · Conversa · Componentes · Versões | — |
+| Versions | `List` of `ListItem` over `/versionRows`; a `Callout` pinned under the app while one is looked at | `view`, `back` (client), `restore` (platform) |
+| Components | `List` of dense `ListItem` over `/tree` (`inset` = depth, `icon component:<Type>`, `selected`), the picked component's rows in a `Box` | `pick`, `toggle_picking` (client) |
+| Layout | A `Screen` (`TopBar` header). `Pages` on `/$viewport/size`: `expanded` is a `Split` of three `Panel`s (Conversa, its composer pinned · Prévia · Componentes/Versões tabs); otherwise one `Panel` at a time, picked by a bottom `NavBar` on `/tab` | — |
 
 The Dart the actions share (`treeOf`, `turnsOf`, `versionRowsOf`,
 `pickedRowsOf`, `slim`, `viewsOf`) is written once in `editor.ts` and
 prepended to each action. The runner has no imports. Platform actions put
 the edited app (`slim`: no data, no code) in `/app` and the history in
 `/history`. Client actions compute from those on the device.
+
+## The editor as a project
+
+The editor is a `web` app, so opening it (from the home, like any app)
+shows it in a browser frame at its wide layout: the whole studio, with its
+own Surface drawn as **O motor do app**, a placeholder for the engine. It
+is not run live inside itself. Its data carries `editorVersion`; a copy
+older than `EDITOR_VERSION` (`editor.ts`) is brought up to date when it is
+opened, as a new version ("O editor foi atualizado."), and the old one can
+still be restored.
+
+## Selection
+
+The picked component (`selected` on the Surface) is outlined in the
+accent and tagged with its id whether or not picking is on, so a pick in
+the tree shows in the app. While picking, the innermost component under
+the pointer gets a lighter outline and tag, and a tap picks it instead of
+running it.
 
 ## Limits
 

@@ -133,6 +133,19 @@ class _SurfaceState extends State<_Surface> {
         ),
       );
     }
+    final renderer = AppRenderer(
+      ui: app.ui,
+      data: app.data,
+      pending: pending,
+      // A version is looked at, not used.
+      onEdit: cubit?.edit ?? (_, _) {},
+      onAction: (action, event) =>
+          cubit == null ? null : unawaited(cubit.act(action, event)),
+      onSelect: widget.onPick,
+      // Outlined whether or not the screen is being picked from: a pick
+      // in the tree shows here too.
+      selectedId: widget.selectedId,
+    );
     final page = ColoredBox(
       color: AppColors.bg,
       child: Column(
@@ -140,26 +153,18 @@ class _SurfaceState extends State<_Surface> {
         children: [
           Expanded(
             // Built inside the frame: its insets are the drawn phone's.
-            child: Builder(
-              builder: (context) => SingleChildScrollView(
-                // Below a drawn phone's status bar, above its home indicator.
-                padding: MediaQuery.paddingOf(
-                  context,
-                ).add(const EdgeInsets.all(AppSpacing.s6)),
-                child: AppRenderer(
-                  ui: app.ui,
-                  data: app.data,
-                  pending: pending,
-                  // A version is looked at, not used.
-                  onEdit: cubit?.edit ?? (_, _) {},
-                  onAction: (action, event) => cubit == null
-                      ? null
-                      : unawaited(cubit.act(action, event)),
-                  onSelect: widget.onPick,
-                  selectedId: widget.selectedId,
-                ),
-              ),
-            ),
+            child: AppRenderer.fillsScreen(app.ui)
+                ? renderer
+                : Builder(
+                    builder: (context) => SingleChildScrollView(
+                      // Below a drawn phone's status bar, above its home
+                      // indicator.
+                      padding: MediaQuery.paddingOf(
+                        context,
+                      ).add(const EdgeInsets.all(AppSpacing.s6)),
+                      child: renderer,
+                    ),
+                  ),
           ),
           if (error != null)
             ColoredBox(
@@ -190,24 +195,56 @@ class _SurfaceState extends State<_Surface> {
   }
 }
 
+/// Where an app drawn inside itself would run again: the engine's place,
+/// marked, filling the room it is given.
 class _SurfacePlaceholder extends StatelessWidget {
   const _SurfacePlaceholder();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: AppSpacing.imageLarge,
-      decoration: BoxDecoration(
-        color: AppColors.fill,
-        border: Border.all(color: AppColors.line),
-        borderRadius: const BorderRadius.all(
-          Radius.circular(AppSpacing.cardRadius),
+    final l10n = context.l10n;
+    return LayoutBuilder(
+      builder: (context, constraints) => Container(
+        constraints: constraints.hasBoundedHeight
+            ? null
+            : const BoxConstraints(minHeight: AppSpacing.imageLarge),
+        decoration: BoxDecoration(
+          color: AppColors.fill,
+          border: Border.all(color: AppColors.fillStrong),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppSpacing.cardRadius),
+          ),
         ),
-      ),
-      child: Center(
-        child: AppIcon(
-          iconData: AppIcons.components['Surface']!,
-          color: AppColors.ink3,
+        padding: const EdgeInsets.all(AppSpacing.s6),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: AppSpacing.s3,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.s4),
+                decoration: const BoxDecoration(
+                  color: AppColors.accentSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: AppIcon(
+                  iconData: AppIcons.named['engine']!,
+                  size: AppSpacing.iconLarge,
+                  color: AppColors.accent,
+                ),
+              ),
+              Text(
+                l10n.appsEnginePlaceholderTitle,
+                textAlign: TextAlign.center,
+                style: AppTypography.title,
+              ),
+              Text(
+                l10n.appsEnginePlaceholderBody,
+                textAlign: TextAlign.center,
+                style: AppTypography.label,
+              ),
+            ],
+          ),
         ),
       ),
     );

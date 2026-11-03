@@ -18,7 +18,7 @@ import {
 } from './bundle';
 import { ICONS } from './catalog';
 import { Changes, describeApp, diff, EDIT_TOOLS, runEdit } from './edit';
-import { EDITOR } from './editor/editor';
+import { EDITOR, EDITOR_VERSION } from './editor/editor';
 import { platformCalls } from './platform';
 import { ActionFailedError, ActionRunner } from './runner';
 
@@ -133,17 +133,26 @@ export class AppsService {
 
   /**
    * The person's My Own App Editor (`editor/editor.ts`), made the first
-   * time it is asked for: their own copy, theirs to change.
+   * time it is asked for: their own copy, theirs to change. It is a web
+   * app (a studio is wide). A copy made from an older `editor.ts` (its
+   * `editorVersion` is behind [EDITOR_VERSION]) is brought up to this one
+   * as a new version; the one it had can still be restored.
    */
   async editor(userId: string): Promise<AppSnapshot> {
     const [found] = await this._db
-      .select({ id: generatedApp.id })
+      .select({ id: generatedApp.id, data: generatedApp.data })
       .from(generatedApp)
       .where(
         and(eq(generatedApp.userId, userId), eq(generatedApp.seed, 'editor')),
       )
       .limit(1);
-    if (found) return this.get(userId, found.id);
+    if (found) {
+      const data = found.data as { editorVersion?: unknown } | null;
+      if (data?.editorVersion !== EDITOR_VERSION) {
+        await this._resetEditor(userId, found.id, 'O editor foi atualizado.');
+      }
+      return this.get(userId, found.id);
+    }
 
     const bundle = {
       ...EDITOR,
@@ -156,6 +165,7 @@ export class AppsService {
           userId,
           prompt: EDITOR_PROMPT,
           seed: 'editor',
+          form: 'web',
           ...structuredClone(bundle),
         })
         .returning({ id: generatedApp.id });
@@ -163,6 +173,7 @@ export class AppsService {
         appId: app.id,
         n: 1,
         prompt: EDITOR_PROMPT,
+        form: 'web',
         ...structuredClone(bundle),
         changes: created(bundle),
       });
@@ -178,7 +189,19 @@ export class AppsService {
    */
   async resetEditor(userId: string): Promise<EditOutcome> {
     const current = await this.editor(userId);
-    const row = await this._row(userId, current.id);
+    return this._resetEditor(
+      userId,
+      current.id,
+      'O editor voltou a ser o original.',
+    );
+  }
+
+  private async _resetEditor(
+    userId: string,
+    id: string,
+    reply: string,
+  ): Promise<EditOutcome> {
+    const row = await this._row(userId, id);
     await this._firstVersion(row);
     const bundle: Bundle = {
       ...structuredClone(EDITOR),
@@ -186,8 +209,8 @@ export class AppsService {
     };
     return this._commit(userId, row.id, row, {
       prompt: '',
-      form: 'mobile',
-      reply: 'O editor voltou a ser o original.',
+      form: 'web',
+      reply,
       bundle,
       changes: diff(bundleOf(row), bundle),
       data: () => structuredClone(EDITOR.data),
@@ -825,28 +848,44 @@ Where an action runs. Every action runs on the person's device the moment they t
 - An action named "start", if there is one, runs when the app opens.
 - "client": not saved; only for screen-only state (a filter, a tab, a form step). Its third argument, call: "final List kept = await call('save_item', {'title': title});" runs a server action and resolves to its patch. Never write a client action that only calls a server one: write the server action and point the button at it.
 
-Components (every one has "id" and "component"). Any component may also have "visible" ({"path"}: drawn only when the value is something, not null, false, 0, "" or empty; or {"path", "is": value}: only when it equals value, and with "not": true only when it does not), "weight" (a number: inside a Row, its share of the width) and "inset" (a number or {"path"}: steps of indentation from the left).
+Components (every one has "id" and "component"). Any component may also have "visible" ({"path"}: drawn only when the value is something, not null, false, 0, "" or empty; or {"path", "is": value}: only when it equals value, and with "not": true only when it does not), "weight" (a number: inside a Row or a Split, its share of the width), "inset" (a number or {"path"}: steps of indentation from the left), and box properties, each naming a token, never pixels: "padding" (none, xs, sm, md, lg, xl, xxl), "background" and "border" (bg, surface, fill, fillStrong, line, accent, accentSoft, positive, positiveSoft, negative, negativeSoft, warning, warningSoft, muted; "border": true is a hairline), "radius" (none, sm, md, lg, xl, pill), "width" (sm, md, lg, fill, or a number) and "height" (a number).
 Besides the data, components (never actions) may read /$viewport/width, /$viewport/height and /$viewport/size ("compact" for a phone, "medium", "expanded" for a wide window), and /$pending/<action name>: the event of a platform action on its way, missing when none is.
+Make it look like a real, polished app: frame the screen with a Screen and a TopBar, group rows into ListItems, use Cards, Stats, Badges and Callouts for what stands out, an EmptyState when a list is empty, and a NavBar (with Pages) for several screens.
+Structure:
+- Screen: the whole screen. "header" (a TopBar id), "body" (one id; it scrolls, unless it is a Split or a Panel, which fill), "footer" (an id pinned under the body: a composer, a total), "nav" (a NavBar id). Make it the root.
+- TopBar: "title", "subtitle", "leading" (one id before the title: an Avatar, an Icon), "trailing" (ids at the end: icon Buttons). A back arrow shows by itself when there is somewhere to go back to.
+- NavBar: "items" [{"label", "icon", "value"}], "value" {"path"} (the open item's value; a tap writes it, so Pages with "current" on the same path switch screens). "variant": "side" for a web app's side navigation (put it in the Screen's "nav" either way).
+- Split: panes side by side, the full height, hairlines between them (a web app's columns, an inbox). "children" are the panes; give a side pane "width" (sm, md, lg) and the main one nothing.
+- Panel: a titled section that fills its pane: "title", "icon", "trailing" (ids in its header), "child" or "children" (a Column, with "gap"), "footer" (pinned at its bottom), "scroll" (false to centre its content instead).
 Layout:
-- Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index". Column and Row take "justify" (start, center, end, spaceBetween) and "align" (start, center, end, stretch). A List may be "direction": "horizontal" (a strip that scrolls sideways). A Column or Row with "action" is tapped whole.
-- Card: "child" (one id), drawn on a raised surface; with "action", the whole card is tappable.
-- Divider: a thin line.
-- Tabs: "tabs" [{"title": "...", "child": "<id>"}]; optionally "value" {"path"} holding the title of the open tab.
-- Pages: one screen at a time, for an app with several screens. "pages" {"<page name>": "<id>"} and "current" {"path": "/page"} (a page name); the first page shows when current is empty. Navigate with a client action that replaces /page.
+- Column / Row / List: "children" is a list of ids, or a template {"componentId": "...", "path": "/todos"} that draws the component once per item of that array. Inside a template, a path without a leading "/" is relative to the item ("title"), and every event fired inside it carries "itemPath", the item's absolute pointer (e.g. "/todos/2") and "index". "gap" (none, xs, sm, md (the default), lg, xl). Column and Row take "justify" (start, center, end, spaceBetween) and "align" (start, center, end, stretch); a Row may "wrap" (true: chips that run onto more lines). A List may be "direction": "horizontal" (a strip that scrolls sideways), or "divided": true (hairlines between rows, a settings list). A Column or Row with "action" is tapped whole.
+- Box: a shape around "child" or "children" ("direction": "row" for side by side, with "gap"): "shape" rounded (the default), pill, circle, square, bubbleStart or bubbleEnd (a chat bubble); "background" (default fill), "border", "padding" (default md), "center" (true). With "action", tapped whole.
+- Grid: "children" (ids or a template) as tiles, "columns" (a number; by default as many as fit), "gap".
+- Spacer: inside a Row, pushes what follows to the end; "size" (a step) for a fixed gap.
+- Card: "child" (one id), on a raised surface; "variant" outlined (the default), filled or accent; with "action", the whole card is tappable.
+- Divider: a thin line; "label" for a word in the middle, "vertical": true inside a Row.
+- Tabs: "tabs" [{"title": "...", "icon", "child": "<id>"}] as an underlined strip ("variant": "pills" for chips); optionally "value" {"path"} holding the title of the open tab.
+- Pages: one screen at a time, for an app with several screens. "pages" {"<page name>": "<id>"} and "current" {"path": "/page"} (a page name); the first page shows when current is empty. Navigate with a NavBar on the same path, or a client action that replaces /page.
 - Modal: "content" (one id) shown as a sheet over the screen while "open" {"path"} is true; tapping outside sets it false.
 Display:
-- Text: "text" is a string or {"path"}; "variant" is "h1", "h2", "h3", "body" or "caption"; "tone" is "muted", "accent", "positive" or "negative".
-- Icon: "name" (a string or {"path"}), one of: ${ICONS.join(', ')}; or "component:<a component>" for that component's own icon. "tone" as Text.
-- Image: "url" (https only, or {"path"}), "fit" (cover, contain), "variant" (avatar, smallFeature, mediumFeature, largeFeature, header).
-- Badge: "text" and "tone": a small pill, for a count or a state.
-- Message: a chat bubble. "text", "role" ("me" on the right, "other" on the left), optional "caption" under it.
+- Text: "text" is a string or {"path"}; "variant" is "h1", "h2", "h3", "body", "strong", "label" or "caption"; "tone" is "muted", "faint", "accent", "positive", "negative" or "warning"; "textAlign" (start, center, end); "maxLines".
+- Icon: "name" (a string or {"path"}), one of: ${ICONS.join(', ')}; or "component:<a component>" for that component's own icon. "tone" as Text, "size" (sm, md, lg).
+- Image: "url" (https only, or {"path"}), "fit" (cover, contain), "variant" (avatar, smallFeature, mediumFeature, largeFeature, header), "radius".
+- Badge: "text", "tone", optional "icon"; "variant" soft (the default), solid or outline: a small pill, for a count or a state.
+- Message: a chat bubble. "text", "role" ("me" on the right, "other" on the left, "system" a centred line), optional "name" over it and "caption" under it.
+- ListItem: one row of a list: "icon" (on a tile) or "avatar" (a name: its initials), "title", "subtitle", "meta" (a short text at the end: a time, a price), "trailing" (ids: a Switch, a Badge, a Button), "chevron" (true: it opens something), "selected" (a boolean or {"path"}), "dense". With "action", tapped whole. Prefer it to a hand-made Row for any list of things.
+- Avatar: "name" (initials) or "url", "size" (sm, md, lg), "tone".
+- Progress: "value" (0 to 1, or to "max"), "label", "tone", "showValue" (true: the percentage).
+- Stat: a number that matters: "label", "value", "caption", "icon", "tone" (of the caption), "trend" (up, down). Put a few in a Grid of Cards for a dashboard.
+- Callout: a note that stands out: "tone" (accent, positive, negative, warning, muted), "icon", "title", "text", "trailing" (ids: a Button).
+- EmptyState: what an empty list shows: "icon", "title", "text", "trailing" (ids: the Button that fills it). Use "visible" to show it only when the list is empty.
 Input (what is typed or picked lives on the device until an action sends it from the event):
-- TextField: "label" (string) and "value" {"path"}; "variant" "longText" (several lines), "number" or "obscured"; with "action", pressing enter runs it.
+- TextField: "label" (the placeholder) and "value" {"path"}; "title" (a label over the field); "icon"; "variant" "longText" (several lines), "number", "obscured" or "search"; with "action", pressing enter runs it.
 - CheckBox / Switch: "label" and "value" {"path"} (a boolean). Without "action" a tap flips the value on the device; with "action" it runs the action instead, with event.value the new value, and the action must change it.
-- ChoicePicker: "options" [{"label", "value"}] (or {"path"} to such a list), "value" {"path"} (a list of the chosen values), "variant" "mutuallyExclusive" or "multipleSelection". Optional "action", as CheckBox.
+- ChoicePicker: "options" [{"label", "value"}] (or {"path"} to such a list), "value" {"path"} (a list of the chosen values), "variant" "mutuallyExclusive" or "multipleSelection", "style" "chips" (the default) or "segmented" (a joined control, for two to four options). Optional "action", as CheckBox.
 - Slider: "label", "min", "max", "value" {"path"} (a number). Optional "action", run when the thumb is let go, with event.value.
 - DateTimeInput: "label", "value" {"path"} (an ISO 8601 string), "enableDate", "enableTime". Optional "action", as CheckBox.
-- Button: "label" (string), "action", optional "icon" (an icon name) and "variant" ("primary" for the one main thing on the screen, "default", "borderless").
+- Button: "label" (string), "action", optional "icon" (an icon name; with an empty label, an icon button) and "variant" ("primary" for the one main thing on the screen, "default", "borderless", "danger"); "width": "fill" for a full-width one.
 Engine:
 - Surface: another of the person's apps, drawn and running inside this one. "app" (an app id, usually {"path"}), "frame" ("auto": in a phone or a browser by that app's form; "none"), "version" (a number: show that version, read-only), "revision" ({"path"}: when its value changes, the app is loaded again), "picking" ({"path"}, a boolean: taps pick a component instead of running it, and fire "action" with event.componentId), "selected" ({"path"}: the id of the component outlined).
 An action reference is {"event": {"name": "<action name>", "context": {"key": {"path": "/draft"} or a literal}}}; the context values reach run as event.key.
@@ -867,15 +906,18 @@ const FORMS: Record<AppForm, string> = {
 const EXAMPLE = `{"name": "Tarefas",
  "data": {"draft": "", "todos": []},
  "ui": [
-  {"id": "root", "component": "Column", "children": ["title", "form", "list"]},
-  {"id": "title", "component": "Text", "text": "Minhas tarefas", "variant": "title"},
-  {"id": "form", "component": "Row", "children": ["field", "add"]},
-  {"id": "field", "component": "TextField", "label": "Nova tarefa", "value": {"path": "/draft"}},
-  {"id": "add", "component": "Button", "label": "Adicionar", "action": {"event": {"name": "add_todo", "context": {"title": {"path": "/draft"}}}}},
-  {"id": "list", "component": "List", "children": {"componentId": "item", "path": "/todos"}},
-  {"id": "item", "component": "Row", "children": ["check", "remove"]},
+  {"id": "root", "component": "Screen", "header": "bar", "body": "main", "footer": "form"},
+  {"id": "bar", "component": "TopBar", "title": "Minhas tarefas", "subtitle": "Casa em dia"},
+  {"id": "main", "component": "Column", "gap": "sm", "children": ["empty", "list"]},
+  {"id": "empty", "component": "EmptyState", "icon": "checkCircle", "title": "Nada por fazer", "text": "Adicione a primeira tarefa abaixo.", "visible": {"path": "/todos", "is": []}},
+  {"id": "list", "component": "List", "gap": "xs", "children": {"componentId": "item", "path": "/todos"}},
+  {"id": "item", "component": "Card", "variant": "filled", "padding": "xs", "child": "row"},
+  {"id": "row", "component": "Row", "gap": "xs", "children": ["check", "remove"]},
   {"id": "check", "component": "CheckBox", "label": {"path": "title"}, "value": {"path": "done"}, "action": {"event": {"name": "toggle_todo", "context": {"done": {"path": "done"}}}}},
-  {"id": "remove", "component": "Button", "label": "Remover", "action": {"event": {"name": "remove_todo"}}}
+  {"id": "remove", "component": "Button", "icon": "delete", "label": "", "variant": "borderless", "action": {"event": {"name": "remove_todo"}}},
+  {"id": "form", "component": "Row", "gap": "sm", "children": ["field", "add"]},
+  {"id": "field", "component": "TextField", "label": "Nova tarefa", "value": {"path": "/draft"}, "action": {"event": {"name": "add_todo", "context": {"title": {"path": "/draft"}}}}},
+  {"id": "add", "component": "Button", "icon": "add", "label": "", "variant": "primary", "action": {"event": {"name": "add_todo", "context": {"title": {"path": "/draft"}}}}}
  ],
  "actions": {
   "add_todo": {"on": "server", "input": [], "code": "Future<List> run(Map input, Map event, Function call) async { final title = (event['title'] as String? ?? '').trim(); if (title.isEmpty) return []; return [{'op': 'add', 'path': '/todos/-', 'value': {'title': title, 'done': false}}, {'op': 'replace', 'path': '/draft', 'value': ''}]; }"},

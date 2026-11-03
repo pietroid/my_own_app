@@ -137,6 +137,16 @@ class _AppScreen extends StatelessWidget {
     final cubit = context.read<AppRunCubit>();
     final state = context.watch<AppRunCubit>().state;
     final app = state.app;
+    final fills = app != null && AppRenderer.fillsScreen(app.ui);
+    final renderer = app == null
+        ? null
+        : AppRenderer(
+            ui: app.ui,
+            data: app.data,
+            pending: state.pending,
+            onEdit: cubit.edit,
+            onAction: (action, event) => unawaited(cubit.act(action, event)),
+          );
 
     return BlocListener<AppRunCubit, AppRunState>(
       listenWhen: (previous, current) =>
@@ -149,35 +159,30 @@ class _AppScreen extends StatelessWidget {
         ),
       ),
       child: Scaffold(
-        appBar: AppBar(title: Text(app?.name ?? '')),
+        // A screen made with a Screen brings its own top bar, back arrow
+        // included.
+        appBar: fills ? null : AppBar(title: Text(app?.name ?? '')),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?banner,
             Expanded(
-              child: app != null
-                  ? ListView(
+              child: app == null
+                  ? state.loadFailed
+                        ? AppEmptyState(
+                            title: l10n.appsLoadFailed,
+                            action: AppButton(
+                              onPressed: () => unawaited(cubit.load()),
+                              text: l10n.appsRetry,
+                            ),
+                          )
+                        : const Center(child: AppTypingIndicator())
+                  : fills
+                  ? renderer!
+                  : ListView(
                       padding: const EdgeInsets.all(AppSpacing.s4),
-                      children: [
-                        AppRenderer(
-                          ui: app.ui,
-                          data: app.data,
-                          pending: state.pending,
-                          onEdit: cubit.edit,
-                          onAction: (action, event) =>
-                              unawaited(cubit.act(action, event)),
-                        ),
-                      ],
-                    )
-                  : state.loadFailed
-                  ? AppEmptyState(
-                      title: l10n.appsLoadFailed,
-                      action: AppButton(
-                        onPressed: () => unawaited(cubit.load()),
-                        text: l10n.appsRetry,
-                      ),
-                    )
-                  : const Center(child: AppTypingIndicator()),
+                      children: [renderer!],
+                    ),
             ),
           ],
         ),

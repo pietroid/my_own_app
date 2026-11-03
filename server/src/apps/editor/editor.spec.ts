@@ -1,7 +1,9 @@
 import { parseBundle } from '../bundle';
 import { AppSnapshot } from '../apps.service';
 import { COUNTER, serviceForTest, toolCall } from '../service.testing';
-import { EDITOR } from './editor';
+import { eq } from 'drizzle-orm';
+import { generatedApp } from '../../db/schema';
+import { EDITOR, EDITOR_VERSION } from './editor';
 
 type Row = Record<string, unknown>;
 
@@ -80,8 +82,8 @@ describe('My Own App Editor', () => {
       text: 'Nada mudou, está bom.',
       caption: 'Versão 2 · atual',
     });
-    expect((now.tree as Row[]).find((r) => r.id === 'more')!.tone).toBe(
-      'accent',
+    expect((now.tree as Row[]).find((r) => r.id === 'more')!.selected).toBe(
+      true,
     );
   });
 
@@ -147,11 +149,24 @@ describe('My Own App Editor', () => {
     });
   });
 
-  it('opens itself: the editor edits the editor', async () => {
+  it('opens itself: the editor is a web project like any other', async () => {
+    expect(editor.form).toBe('web');
     await t.apps.act('ana', editor.id, 'start', { id: editor.id });
     const now = await data();
     expect(now.title).toBe('My Own App Editor');
-    expect((now.tree as Row[]).some((r) => r.id === 'surface')).toBe(true);
+    expect(now.formChoice).toEqual(['web']);
+    const tree = now.tree as Row[];
+    expect(tree[0]).toMatchObject({ id: 'root', label: 'Tela' });
+    // Every pane is in the tree: the slots and the trailing ids are read.
+    for (const id of [
+      'topBar',
+      'pickButton',
+      'chatPanel',
+      'composer',
+      'surface',
+    ]) {
+      expect(tree.some((r) => r.id === id)).toBe(true);
+    }
   });
 
   it('comes back as the original, as a new version', async () => {
@@ -160,5 +175,24 @@ describe('My Own App Editor', () => {
     expect(reset.app.version).toBe(2);
     expect(reset.app.data.editing).toBe('');
     expect(reset.version.reply).toBe('O editor voltou a ser o original.');
+    expect(reset.app.form).toBe('web');
+  });
+
+  it('brings a copy made from an older editor up to this one', async () => {
+    await t.apps.act('ana', editor.id, 'start', { id: counter.id });
+    await t.db
+      .update(generatedApp)
+      .set({ data: { editorVersion: 1 } })
+      .where(eq(generatedApp.id, editor.id));
+    const upgraded = await t.apps.editor('ana');
+    expect(upgraded.id).toBe(editor.id);
+    expect(upgraded.data.editorVersion).toBe(EDITOR_VERSION);
+    const history = await t.apps.history('ana', editor.id);
+    expect(history.versions.at(-1)!.reply).toBe('O editor foi atualizado.');
+    // Up to date: opening it again makes no other version.
+    await t.apps.editor('ana');
+    expect((await t.apps.history('ana', editor.id)).versions).toHaveLength(
+      history.versions.length,
+    );
   });
 });

@@ -159,10 +159,31 @@ class AppIcons {
     'restore': AppIconData.phosphor(PhosphorIconsRegular.arrowCounterClockwise),
     'action': AppIconData.phosphor(PhosphorIconsRegular.lightning),
     'component': AppIconData.phosphor(PhosphorIconsRegular.squaresFour),
+    'layout': AppIconData.phosphor(PhosphorIconsRegular.layout),
+    'sidebar': AppIconData.phosphor(PhosphorIconsRegular.sidebarSimple),
+    'engine': AppIconData.phosphor(PhosphorIconsRegular.cube),
+    'trendUp': AppIconData.phosphor(PhosphorIconsRegular.trendUp),
+    'trendDown': AppIconData.phosphor(PhosphorIconsRegular.trendDown),
   };
 
   /// Each catalog component's icon, by its type, for the studio's tree.
   static const components = <String, AppIconData>{
+    'Screen': AppIconData.phosphor(PhosphorIconsRegular.frameCorners),
+    'TopBar': AppIconData.phosphor(PhosphorIconsRegular.rowsPlusTop),
+    'NavBar': AppIconData.phosphor(PhosphorIconsRegular.rowsPlusBottom),
+    'Split': AppIconData.phosphor(PhosphorIconsRegular.squareSplitHorizontal),
+    'Panel': AppIconData.phosphor(PhosphorIconsRegular.sidebar),
+    'Box': AppIconData.phosphor(PhosphorIconsRegular.boundingBox),
+    'Grid': AppIconData.phosphor(PhosphorIconsRegular.gridFour),
+    'Spacer': AppIconData.phosphor(
+      PhosphorIconsRegular.arrowsOutLineHorizontal,
+    ),
+    'ListItem': AppIconData.phosphor(PhosphorIconsRegular.textAlignLeft),
+    'Avatar': AppIconData.phosphor(PhosphorIconsRegular.userCircle),
+    'Progress': AppIconData.phosphor(PhosphorIconsRegular.gauge),
+    'Stat': AppIconData.phosphor(PhosphorIconsRegular.chartLineUp),
+    'Callout': AppIconData.phosphor(PhosphorIconsRegular.lightbulb),
+    'EmptyState': AppIconData.phosphor(PhosphorIconsRegular.tray),
     'Column': AppIconData.phosphor(PhosphorIconsRegular.rows),
     'Row': AppIconData.phosphor(PhosphorIconsRegular.columns),
     'List': AppIconData.phosphor(PhosphorIconsRegular.listBullets),
