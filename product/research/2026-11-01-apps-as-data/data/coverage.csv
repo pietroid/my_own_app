@@ -1,0 +1,7 @@
+tier,apps_covered,of,percent,newly_covered
+"0 today: app_ui (2 widgets), no data, no actions",0,42,0,""
+"1 A2UI basic catalog + data JSON + stored actions",7,42,17,"to-do list; notes; meal planner; grocery list; reading list; quiz; invoice generator"
+"2 + chart, map, photo components",17,42,40,"expense tracker; monthly budget; travel planner; recipe book; workout log; journal; mood tracker; home inventory; event planner; timesheet"
+"3 + host calls: schedule, fetch, ai",29,42,69,"habit tracker; flashcards; personal CRM; pet care; plant watering; medication reminders; car maintenance; subscription tracker; weather; news reader; stock portfolio; language practice"
+"4 + an app shared by several people",33,42,79,"family chores; shared shopping list; small business booking; club or team roster"
+"out of reach",9,42,21,"restaurant ordering (payments); online store (payments); chat (realtime); social feed (realtime); ride hailing (realtime+payments+hardware); music streaming (heavy_media); photo editor (heavy_media); GPS run tracker (hardware); action game (game)"

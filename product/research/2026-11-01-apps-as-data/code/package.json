@@ -1,0 +1,7 @@
+{
+  "name": "apps-as-data-bench",
+  "private": true,
+  "type": "module",
+  "scripts": { "bench": "node --no-node-snapshot bench.mjs > ../data/sandbox-bench.csv" },
+  "dependencies": { "quickjs-emscripten": "^0.31.0", "isolated-vm": "^6.0.0" }
+}

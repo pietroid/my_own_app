@@ -1,0 +1,43 @@
+app,needs
+to-do list,crud
+notes,crud
+habit tracker,crud;chart;schedule
+expense tracker,crud;chart
+monthly budget,crud;chart
+travel planner,crud;map;chart
+recipe book,crud;photo
+meal planner,crud
+grocery list,crud
+workout log,crud;chart
+reading list,crud
+journal,crud;photo
+mood tracker,crud;chart
+flashcards,crud;ai
+quiz,crud
+personal CRM,crud;schedule
+home inventory,crud;photo
+event planner,crud;map
+pet care,crud;schedule
+plant watering,crud;schedule
+medication reminders,crud;schedule
+car maintenance,crud;schedule
+subscription tracker,crud;schedule;chart
+invoice generator,crud
+timesheet,crud;chart
+weather,fetch
+news reader,fetch
+stock portfolio,crud;fetch;chart
+language practice,crud;ai
+family chores,crud;multi_user
+shared shopping list,crud;multi_user
+small business booking,crud;multi_user;schedule
+club or team roster,crud;multi_user
+restaurant ordering,crud;multi_user;payments
+online store,crud;payments
+chat,realtime;multi_user
+social feed,crud;multi_user;photo;realtime
+ride hailing,map;realtime;payments;hardware
+music streaming,heavy_media
+photo editor,heavy_media;photo
+GPS run tracker,map;hardware;chart
+action game,game
